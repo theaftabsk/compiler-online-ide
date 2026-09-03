@@ -46,7 +46,67 @@ conn.on('ready', async () => {
     console.log('\n--- Compiling Next.js Frontend ---');
     await execCommand(conn, 'cd /var/www/codelab/fronted && npm run build');
 
-    // 4. Restart PM2 Services
+    // 4. Configure Nginx for kaspro.online & api.kaspro.online
+    console.log('\n--- Updating Nginx Configuration for kaspro.online ---');
+    const nginxConf = `server {
+    listen 80;
+    server_name kaspro.online www.kaspro.online;
+
+    location /api {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /socket.io {
+        rewrite ^/socket.io$ /socket.io/ break;
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name api.kaspro.online;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`;
+    await execCommand(conn, `cat << 'NGINXEOF' > /etc/nginx/sites-available/kaspro.online\n${nginxConf}\nNGINXEOF`);
+    await execCommand(conn, 'ln -sf /etc/nginx/sites-available/kaspro.online /etc/nginx/sites-enabled/kaspro.online');
+    await execCommand(conn, 'nginx -t && systemctl reload nginx');
+
+    // 5. Restart PM2 Services
     console.log('\n--- Restarting PM2 Services ---');
     await execCommand(conn, 'pm2 restart all');
     await execCommand(conn, 'pm2 status');
