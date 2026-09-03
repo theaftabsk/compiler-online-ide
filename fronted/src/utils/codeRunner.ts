@@ -24,9 +24,13 @@ export async function executeCodeLive(
     return localResult;
   }
 
-  // 2. Fallback to Backend only if complex system libraries are requested
+  // Try executing via live Docker backend API first
   try {
-    const res = await fetch('http://localhost:5000/api/code/run', {
+    const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+      ? '/api/code/run'
+      : 'http://localhost:5000/api/code/run';
+
+    const res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -39,17 +43,17 @@ export async function executeCodeLive(
 
     if (res.ok) {
       const data = await res.json();
-      if (data.output) {
+      if (data.output !== undefined) {
         return {
-          output: data.output,
+          output: data.output || '(Execution completed)',
           error: data.error,
           exitCode: data.success ? 0 : 1,
-          durationMs: Math.round(performance.now() - startTime),
+          durationMs: data.durationMs || Math.round(performance.now() - startTime),
         };
       }
     }
   } catch (_) {
-    // Graceful offline fallback
+    // Fallback to local sandbox engine
   }
 
   return localResult;
