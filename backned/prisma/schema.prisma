@@ -1,0 +1,234 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. USER ROLES HIERARCHY
+// ==========================================
+enum UserRole {
+  // --- Institutional / College Roles ---
+  SUPER_ADMIN      // Platform Super Administrator
+  COLLEGE_ADMIN    // University Principal / College Authority
+  HOD              // Head of Department (e.g. AI & ML)
+  FACULTY          // Professor / Lab Examiner
+  LAB_ASSISTANT    // Lab Hardware / Room Coordinator
+  STUDENT          // Enrolled University Student (e.g. Aftab Sk, Sec J)
+
+  // --- Independent / Normal User Roles ---
+  INDIVIDUAL_USER  // Normal Registered User (No College needed - can save code, create personal snippets)
+
+  // --- Ephemeral Guest Role ---
+  GUEST            // Anonymous Visitor (Zero Database Saving - Just Run & Leave)
+}
+
+enum SessionStatus {
+  UPCOMING
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum OnlineStatus {
+  ONLINE
+  IDLE
+  OFFLINE
+}
+
+enum SubmissionVerdict {
+  PENDING
+  ACCEPTED
+  WRONG_ANSWER
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  COMPILATION_ERROR
+  RUNTIME_ERROR
+  SECURITY_VIOLATION
+}
+
+// ==========================================
+// 2. MULTI-TENANT INSTITUTION (COLLEGES/UNIVS)
+// ==========================================
+model Institution {
+  id          String       @id @default(uuid())
+  name        String
+  slug        String       @unique // e.g. "brainware-univ"
+  logoUrl     String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  departments Department[]
+  users       User[]
+  labRooms    LabRoom[]
+  sessions    PracticalSession[]
+}
+
+model Department {
+  id            String       @id @default(uuid())
+  institutionId String
+  institution   Institution  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  name          String       // e.g. "AI & ML"
+  code          String       // e.g. "AIML"
+
+  sections      Section[]
+  users         User[]
+}
+
+model Section {
+  id           String             @id @default(uuid())
+  departmentId String
+  department   Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  name         String             // e.g. "Section J"
+  semester     Int                // e.g. 3
+  batchYear    Int                // e.g. 2026
+
+  users        User[]
+  sessions     PracticalSession[]
+}
+
+model LabRoom {
+  id            String             @id @default(uuid())
+  institutionId String
+  institution   Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  roomNumber    String             // e.g. "Lab 204"
+  totalCapacity Int                @default(60)
+
+  sessions      PracticalSession[]
+}
+
+// ==========================================
+// 3. UNIFIED USER TABLE
+// ==========================================
+model User {
+  id            String             @id @default(uuid())
+  
+  // Optional: NULL if user is an Independent Normal User (No college)
+  institutionId String?            
+  institution   Institution?       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  
+  role          UserRole           @default(INDIVIDUAL_USER)
+  fullName      String
+  email         String             @unique
+  passwordHash  String
+  
+  // Optional Academic Details (Populated only for College Students)
+  rollNumber    String?            // e.g. "538"
+  departmentId  String?
+  department    Department?        @relation(fields: [departmentId], references: [id])
+  sectionId     String?
+  section       Section?           @relation(fields: [sectionId], references: [id])
+  createdAt     DateTime           @default(now())
+
+  // Relationships
+  facultySessions   PracticalSession[] @relation("FacultySessions")
+  attendances       SessionAttendee[]
+  submissions       Submission[]
+  savedPlaygrounds  SavedPlayground[]  // Personal Saved Code Library for Independent Users
+}
+
+// ==========================================
+// 4. INDIVIDUAL SAVED CODE (For Normal Logged-in Users)
+// ==========================================
+model SavedPlayground {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String   @default("Untitled Program")
+  language    String   @default("c") // "c", "cpp", "java", "python"
+  code        String   @db.Text
+  customInput String?  @db.Text
+  isStarred   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==========================================
+// 5. COLLEGE PRACTICAL SESSIONS
+// ==========================================
+model PracticalSession {
+  id            String             @id @default(uuid())
+  institutionId String
+  institution   Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  facultyId     String
+  faculty       User               @relation("FacultySessions", fields: [facultyId], references: [id])
+  sectionId     String
+  section       Section            @relation(fields: [sectionId], references: [id])
+  labRoomId     String
+  labRoom       LabRoom            @relation(fields: [labRoomId], references: [id])
+  
+  subjectName   String             // e.g. "Programming in C"
+  sessionCode   String             @unique // e.g. "BW-AIML-J-26X91"
+  status        SessionStatus      @default(ACTIVE)
+  startedAt     DateTime           @default(now())
+  endedAt       DateTime?
+
+  questions     LabQuestion[]
+  attendees     SessionAttendee[]
+  submissions   Submission[]
+}
+
+model LabQuestion {
+  id               String            @id @default(uuid())
+  sessionId        String
+  session          PracticalSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  title            String
+  description      String            @db.Text
+  allowedLanguages String[]
+  timeLimitSec     Float             @default(2.0)
+  memoryLimitMb    Int               @default(128)
+  maxScore         Int               @default(100)
+  starterCode      Json?
+
+  testCases        TestCase[]
+  submissions      Submission[]
+}
+
+model TestCase {
+  id             String       @id @default(uuid())
+  questionId     String
+  question       LabQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  inputData      String       @db.Text
+  expectedOutput String       @db.Text
+  isHidden       Boolean      @default(false)
+  weightage      Int          @default(1)
+}
+
+model SessionAttendee {
+  id              String            @id @default(uuid())
+  sessionId       String
+  session         PracticalSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId       String
+  student         User              @relation(fields: [studentId], references: [id])
+  machineNumber   String            // e.g. "PC-14"
+  ipAddress       String?
+  onlineStatus    OnlineStatus      @default(ONLINE)
+  lastHeartbeat   DateTime          @default(now())
+  currentCode     String?           @db.Text
+  tabSwitchCount  Int               @default(0)
+  joinedAt        DateTime          @default(now())
+
+  @@unique([sessionId, studentId])
+}
+
+model Submission {
+  id              String             @id @default(uuid())
+  sessionId       String
+  session         PracticalSession   @relation(fields: [sessionId], references: [id])
+  questionId      String
+  question        LabQuestion        @relation(fields: [questionId], references: [id])
+  studentId       String
+  student         User               @relation(fields: [studentId], references: [id])
+  language        String
+  submittedCode   String             @db.Text
+  passedTestCases Int                @default(0)
+  totalTestCases  Int                @default(0)
+  score           Int                @default(0)
+  verdict         SubmissionVerdict  @default(PENDING)
+  executionTimeMs Int?
+  compilerOutput  String?            @db.Text
+  submittedAt     DateTime           @default(now())
+}

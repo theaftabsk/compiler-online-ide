@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========================================================
+   OFFICIAL VS CODE / CODELAB IDE DESIGN SYSTEM (DARK & LIGHT)
+   ======================================================== */
+
+:root {
+  /* VS Code Dark Modern (Default) */
+  --vscode-activitybar-bg: #181818;
+  --vscode-activitybar-fg: #858585;
+  --vscode-activitybar-active-fg: #ffffff;
+  --vscode-activitybar-active-border: #0078d4;
+
+  --vscode-sidebar-bg: #1e1e1e;
+  --vscode-sidebar-header: #252526;
+  --vscode-sidebar-border: #2b2b2b;
+  --vscode-sidebar-fg: #cccccc;
+
+  --vscode-editor-bg: #1f1f1f;
+  --vscode-editor-fg: #d4d4d4;
+  --vscode-tab-active-bg: #1f1f1f;
+  --vscode-tab-inactive-bg: #181818;
+  --vscode-tab-border: #2b2b2b;
+  --vscode-breadcrumb-bg: #1f1f1f;
+
+  --vscode-panel-bg: #181818;
+  --vscode-panel-border: #2b2b2b;
+  --vscode-panel-header: #1e1e1e;
+
+  --vscode-statusbar-bg: #007acc;
+  --vscode-statusbar-fg: #ffffff;
+
+  --vscode-input-bg: #2d2d2d;
+  --vscode-input-border: #3c3c3c;
+  --vscode-input-fg: #cccccc;
+}
+
+/* VS Code Light Modern Theme */
+html.light {
+  --vscode-activitybar-bg: #f3f3f3;
+  --vscode-activitybar-fg: #616161;
+  --vscode-activitybar-active-fg: #000000;
+  --vscode-activitybar-active-border: #0078d4;
+
+  --vscode-sidebar-bg: #f8f8f8;
+  --vscode-sidebar-header: #f3f3f3;
+  --vscode-sidebar-border: #e7e7e7;
+  --vscode-sidebar-fg: #3b3b3b;
+
+  --vscode-editor-bg: #ffffff;
+  --vscode-editor-fg: #24292e;
+  --vscode-tab-active-bg: #ffffff;
+  --vscode-tab-inactive-bg: #ececec;
+  --vscode-tab-border: #e7e7e7;
+  --vscode-breadcrumb-bg: #fafafa;
+
+  --vscode-panel-bg: #f8f8f8;
+  --vscode-panel-border: #e7e7e7;
+  --vscode-panel-header: #f3f3f3;
+
+  --vscode-statusbar-bg: #0078d4;
+  --vscode-statusbar-fg: #ffffff;
+
+  --vscode-input-bg: #ffffff;
+  --vscode-input-border: #cecece;
+  --vscode-input-fg: #24292e;
+}
+
+body {
+  background-color: var(--vscode-editor-bg);
+  color: var(--vscode-editor-fg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Smooth Transition for Theme Switch */
+* {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Status Indicator Dots */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-online {
+  background-color: #388a34;
+  box-shadow: 0 0 6px rgba(56, 138, 52, 0.6);
+}
+
+.status-coding {
+  background-color: #0078d4;
+  box-shadow: 0 0 6px rgba(0, 120, 212, 0.6);
+  animation: pulse-dot 2s infinite;
+}
+
+.status-submitted {
+  background-color: #107c41;
+  box-shadow: 0 0 6px rgba(16, 124, 65, 0.6);
+}
+
+.status-offline {
+  background-color: #d13438;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.6; }
+}
+
+/* VS Code Machine Cards */
+.pc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 6px;
+}
+
+.pc-card {
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border: 1px solid var(--vscode-sidebar-border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+html.light .pc-card {
+  background: #ffffff;
+}
+
+.pc-card:hover {
+  border-color: #0078d4;
+  background: rgba(0, 120, 212, 0.06);
+}
+
+/* VS Code Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(121, 121, 121, 0.28);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 100, 100, 0.5);
+}
