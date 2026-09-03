@@ -56,10 +56,11 @@ export async function executeCodeLive(
 function evaluateCodeLocally(
   language: string,
   code: string,
-  inputStr: string,
+  inputStr: any,
   startTime: number
 ): ExecutionResult {
-  const inputs = inputStr.trim().split(/\s+/).filter(Boolean);
+  const safeStr = typeof inputStr === 'string' ? inputStr : (inputStr != null ? String(inputStr) : '');
+  const inputs = safeStr.trim().split(/\s+/).filter(Boolean);
   const lang = language.toLowerCase();
 
   try {
