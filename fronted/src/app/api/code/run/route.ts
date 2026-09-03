@@ -76,7 +76,7 @@ function runInDocker(
     fs.writeFileSync(path.join(jobDir, srcFile), code, 'utf-8');
 
     const dockerBase = [
-      'run', '--rm',
+      'run', '--rm', '-i',
       '--network', 'none',
       '--cpus', '0.5',
       '-m', '128m',

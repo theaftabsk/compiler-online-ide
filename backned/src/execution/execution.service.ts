@@ -209,7 +209,7 @@ export class ExecutionService {
     // --pids-limit 20 (Fork bomb protection)
     // --read-only with tmpfs for scratch
     const baseDockerArgs = [
-      'run', '--rm',
+      'run', '--rm', '-i',
       '--network', 'none',
       '--cpus', '0.5',
       '-m', `${memoryLimitMb}m`,
