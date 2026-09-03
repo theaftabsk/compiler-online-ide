@@ -6,7 +6,7 @@ async function test() {
       body: JSON.stringify({
         language: 'c',
         code: '#include <stdio.h>\nint main() {\n  int n;\n  scanf("%d", &n);\n  if (n % 2 == 0) printf("RESULT: Even (%d)", n);\n  else printf("RESULT: Odd (%d)", n);\n  return 0;\n}',
-        input: '42'
+        input: '7'
       })
     });
     console.log('Status:', res.status);

@@ -85,7 +85,7 @@ export class ExecutionService {
    * Secure Sandbox Execution Pipeline with Docker Isolation and Fallback
    */
   async runCode(dto: RunCodeDto) {
-    const { language, code, input = '', testCases = [], timeLimitMs = 2000, memoryLimitMb = 128 } = dto;
+    const { language, code, input = '', testCases = [], timeLimitMs = 5000, memoryLimitMb = 128 } = dto;
 
     // STEP 1: Static Code Security Analysis
     const audit = this.performSecurityAudit(language, code);

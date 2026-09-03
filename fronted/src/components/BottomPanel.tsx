@@ -306,7 +306,7 @@ export default function BottomPanel() {
                 autoFocus
                 value={cliInput}
                 onChange={(e) => setCliInput(e.target.value)}
-                placeholder={waitingForStdin ? "type input number and press Enter (e.g. 10)..." : "type command (e.g. run, ls, help)..."}
+                placeholder={waitingForStdin ? "type input (e.g. 10 or multiple: 80 90 75) and press Enter..." : "type command (e.g. run, ls, help)..."}
                 className={`flex-1 bg-transparent focus:outline-none text-xs font-mono caret-[#0078d4] ${waitingForStdin ? 'text-amber-300 font-bold placeholder:text-amber-500/60' : (isDark ? 'text-white' : 'text-gray-900')}`}
               />
 
@@ -319,6 +319,12 @@ export default function BottomPanel() {
                 </button>
               )}
             </form>
+
+            {waitingForStdin && (
+              <div className="text-[10px] text-amber-400/80 pl-6 pb-1">
+                💡 Hint: If your program asks for multiple inputs, type all values separated by spaces (e.g. <code className="bg-amber-500/20 px-1 rounded text-white">80 90 75 85 95</code> or <code className="bg-amber-500/20 px-1 rounded text-white">101 John 20</code>) and press Enter.
+              </div>
+            )}
 
             <div ref={terminalBottomRef} />
           </div>

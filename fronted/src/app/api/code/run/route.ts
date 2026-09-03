@@ -8,7 +8,7 @@ import * as crypto from 'crypto';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { language = 'c', code = '', input = '', timeLimitMs = 3000 } = body;
+    const { language = 'c', code = '', input = '', timeLimitMs = 5000 } = body;
 
     const executionId = crypto.randomBytes(8).toString('hex');
     const tempDir = path.join(os.tmpdir(), 'codelab_runner', executionId);
