@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Play, CheckCircle2, Send, ChevronRight, FileText, X, FileCode } from 'lucide-react';
+import { Play, CheckCircle2, Send, ChevronRight, FileText, X, FileCode, Keyboard } from 'lucide-react';
 import { useIDE } from '@/context/IDEContext';
 import { ProgrammingLanguage } from '@/types';
 
@@ -20,13 +20,18 @@ export default function EditorArea() {
     setLanguage, 
     code, 
     setCode, 
+    customInput,
+    setCustomInput,
     isRunning, 
     handleRunCode, 
     handleRunTests, 
     handleSubmitPractical, 
-    viewMode 
+    viewMode,
+    setPanelTab,
+    setPanelOpen
   } = useIDE();
 
+  const [showInputDrawer, setShowInputDrawer] = useState(false);
   const isDark = theme === 'vs-dark';
 
   const currentFile = files.find(f => f.name === activeFileTab);
@@ -71,7 +76,7 @@ export default function EditorArea() {
                 {openTabs.length > 1 && (
                   <button
                     onClick={(e) => closeFileTab(tabName, e)}
-                    title="Close Tab (Ctrl+W)"
+                    title="Close Tab"
                     className="p-0.5 rounded hover:bg-gray-700/40 text-gray-400 hover:text-white transition ml-1"
                   >
                     <X className="w-2.5 h-2.5" />
@@ -82,8 +87,10 @@ export default function EditorArea() {
           })}
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons: Language, Quick Input (STDIN), Run, Tests, Submit */}
         <div className="flex items-center gap-1.5 px-3">
+          
+          {/* Language Selector */}
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value as ProgrammingLanguage)}
@@ -96,18 +103,74 @@ export default function EditorArea() {
             <option value="python">Python (3.11)</option>
           </select>
 
+          {/* Quick Input (Stdin) Toggle */}
+          <div className="relative">
+            <button
+              onClick={() => setShowInputDrawer(!showInputDrawer)}
+              title="Custom Standard Input (stdin) for scanf / input()"
+              className={`px-2 py-0.5 rounded border text-xs flex items-center gap-1 font-mono transition ${customInput ? 'border-[#0078d4] text-[#0078d4] bg-[#0078d4]/10 font-bold' : (isDark ? 'border-gray-700 text-gray-300 hover:bg-gray-700/20' : 'border-gray-300 text-gray-700 hover:bg-gray-100')}`}
+            >
+              <Keyboard className="w-3 h-3 text-[#0078d4]" />
+              <span>Input: {customInput || '(None)'}</span>
+            </button>
+
+            {/* Quick Input Popup Modal */}
+            {showInputDrawer && (
+              <div className={`absolute right-0 top-8 w-64 p-3 rounded-lg border shadow-xl z-50 space-y-2 text-xs select-none ${isDark ? 'bg-[#1f1f1f] border-[#3c3c3c] text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+                <div className="flex justify-between items-center font-bold">
+                  <span>Standard Input (stdin):</span>
+                  <button onClick={() => setShowInputDrawer(false)} className="opacity-60 hover:opacity-100">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+                <p className="text-[10px] opacity-70">
+                  Value fed to <code className="text-[#0078d4]">scanf()</code> or <code className="text-[#0078d4]">input()</code>:
+                </p>
+                <textarea
+                  autoFocus
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  placeholder="e.g. 10 or 7 or Hello"
+                  rows={2}
+                  className={`w-full p-2 text-xs font-mono rounded border focus:outline-none focus:border-[#0078d4] ${isDark ? 'bg-[#141414] border-[#3c3c3c]' : 'bg-gray-50 border-gray-300'}`}
+                />
+                
+                {/* Quick Presets */}
+                <div className="flex items-center gap-1 text-[10px] font-mono">
+                  <span className="opacity-60">Presets:</span>
+                  <button onClick={() => setCustomInput('10')} className="px-1.5 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white">10</button>
+                  <button onClick={() => setCustomInput('7')} className="px-1.5 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white">7</button>
+                  <button onClick={() => setCustomInput('0')} className="px-1.5 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white">0</button>
+                  <button onClick={() => setCustomInput('-5')} className="px-1.5 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white">-5</button>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setShowInputDrawer(false);
+                    handleRunCode();
+                  }}
+                  className="w-full py-1 bg-[#0078d4] hover:bg-[#006cc1] text-white font-bold rounded text-xs transition shadow flex items-center justify-center gap-1"
+                >
+                  <Play className="w-3 h-3 fill-white" /> Run with this Input
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Run Button */}
           <button
             onClick={handleRunCode}
             disabled={isRunning}
-            className="px-2.5 py-0.5 rounded bg-[#0078d4] hover:bg-[#006cc1] text-white font-semibold text-xs flex items-center gap-1 shadow transition"
+            className="px-2.5 py-0.5 rounded bg-[#0078d4] hover:bg-[#006cc1] text-white font-semibold text-xs flex items-center gap-1 shadow transition cursor-pointer"
           >
             <Play className="w-3 h-3 fill-white" /> Run
           </button>
 
+          {/* Tests Button */}
           <button
             onClick={handleRunTests}
             disabled={isRunning}
-            className="px-2.5 py-0.5 rounded bg-[#107c41] hover:bg-[#0e6e39] text-white font-semibold text-xs flex items-center gap-1 shadow transition"
+            className="px-2.5 py-0.5 rounded bg-[#107c41] hover:bg-[#0e6e39] text-white font-semibold text-xs flex items-center gap-1 shadow transition cursor-pointer"
           >
             <CheckCircle2 className="w-3 h-3" /> Tests
           </button>
@@ -115,7 +178,7 @@ export default function EditorArea() {
           {viewMode === 'student_lab' && (
             <button
               onClick={handleSubmitPractical}
-              className="px-2.5 py-0.5 rounded bg-[#8957e5] hover:bg-[#7a48d8] text-white font-semibold text-xs flex items-center gap-1 shadow transition"
+              className="px-2.5 py-0.5 rounded bg-[#8957e5] hover:bg-[#7a48d8] text-white font-semibold text-xs flex items-center gap-1 shadow transition cursor-pointer"
             >
               <Send className="w-3 h-3" /> Submit
             </button>
@@ -134,15 +197,10 @@ export default function EditorArea() {
       <div className="flex-1 w-full relative">
         {activeFileTab.endsWith('.md') ? (
           <div className="p-6 overflow-y-auto h-full space-y-4 max-w-3xl text-xs leading-relaxed font-sans">
-            <h1 className="text-lg font-bold">Practical Problem: Check Positive, Negative, or Zero</h1>
-            <p className="opacity-85">
-              Write a program in C that reads an integer from the standard input and outputs whether the number is <strong>Positive</strong>, <strong>Negative</strong>, or <strong>Zero</strong>.
+            <h1 className="text-lg font-bold">Practical Problem Statement</h1>
+            <p className="opacity-85 leading-relaxed">
+              Write a program that takes an integer input from standard input and evaluates whether it is Even or Odd / Positive, Negative or Zero.
             </p>
-            <div className={`p-3 rounded border font-mono text-[11px] ${isDark ? 'bg-[#252526] border-[#333]' : 'bg-gray-100 border-gray-300'}`}>
-              <div>Input: 10 &rarr; Output: The number is Positive</div>
-              <div>Input: -5 &rarr; Output: The number is Negative</div>
-              <div>Input: 0 &rarr; Output: The number is Zero</div>
-            </div>
           </div>
         ) : (
           <Editor

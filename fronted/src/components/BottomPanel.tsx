@@ -8,7 +8,9 @@ import {
   Minimize2, 
   ChevronDown,
   Terminal as TerminalIcon,
-  Plus
+  Plus,
+  Play,
+  Keyboard
 } from 'lucide-react';
 import { useIDE } from '@/context/IDEContext';
 
@@ -97,7 +99,10 @@ export default function BottomPanel() {
     if (!cliInput.trim()) return;
 
     const raw = cliInput.trim();
-    const cmd = raw.toLowerCase();
+    const parts = raw.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const arg = parts.slice(1).join(' ');
+
     const currentLogs = [...(activeTerm?.logs || []), `user@codelab:~$ ${raw}`];
 
     const updateLogs = (updated: string[]) => {
@@ -134,23 +139,7 @@ export default function BottomPanel() {
       return;
     }
 
-    if (cmd === 'date') {
-      currentLogs.push(new Date().toUTCString());
-      currentLogs.push('user@codelab:~$ ');
-      updateLogs(currentLogs);
-      setCliInput('');
-      return;
-    }
-
-    if (cmd.startsWith('echo ')) {
-      currentLogs.push(raw.substring(5));
-      currentLogs.push('user@codelab:~$ ');
-      updateLogs(currentLogs);
-      setCliInput('');
-      return;
-    }
-
-    if (cmd === 'cat main.c' || (cmd.startsWith('cat ') && cmd.includes('main'))) {
+    if (cmd === 'cat' && parts[1]) {
       currentLogs.push(code);
       currentLogs.push('user@codelab:~$ ');
       updateLogs(currentLogs);
@@ -163,11 +152,11 @@ export default function BottomPanel() {
       cmd === './main' || 
       cmd === './main.out' ||
       cmd.startsWith('gcc') || 
-      cmd.startsWith('g++') || 
-      cmd.startsWith('python') ||
-      cmd.startsWith('javac') ||
-      cmd.startsWith('make')
+      cmd.startsWith('python')
     ) {
+      if (arg) {
+        setCustomInput(arg);
+      }
       setCliInput('');
       handleRunCode();
       return;
@@ -181,7 +170,7 @@ export default function BottomPanel() {
 
     if (cmd === 'help') {
       currentLogs.push(
-        'Available Shell Commands:\n  • run / ./main         : Compile & execute code with input buffer\n  • gcc main.c -o main   : Compile C program\n  • python main.py       : Run Python script\n  • cat <file>           : View file contents (e.g. cat main.c)\n  • ls / dir             : List directory files\n  • pwd                  : Print current working directory\n  • test                 : Evaluate all test cases\n  • whoami               : Show authenticated user\n  • clear / cls          : Clear terminal window\n  • echo <msg>           : Print message'
+        'Available Shell Commands:\n  • run [input]          : Compile & execute (e.g. run 7 or run 10)\n  • gcc main.c -o main   : Compile C program\n  • python script.py     : Run Python script\n  • cat <file>           : View file contents\n  • ls / dir             : List files\n  • test                 : Evaluate all test cases\n  • clear / cls          : Clear terminal'
       );
       currentLogs.push('user@codelab:~$ ');
       updateLogs(currentLogs);
@@ -215,7 +204,7 @@ export default function BottomPanel() {
       )}
 
       {/* VS Code Terminal Header */}
-      <div className={`h-8 px-3 flex items-center justify-between border-b text-[11px] font-sans tracking-wide select-none shrink-0 ${isDark ? 'bg-[#181818] border-[#2b2b2b] text-[#969696]' : 'bg-[#f3f3f3] border-[#e7e7e7] text-[#616161]'}`}>
+      <div className={`h-8 px-3 flex items-center justify-between border-b text-[11px] font-sans tracking-wide select-none shrink-0 ${isDark ? 'bg-[#181818] border-[#2b2b2b] text-[#969696]' : 'bg-[#f3f3f3] border-[#e7e7e7]'}`}>
         
         {/* Left Tabs */}
         <div className="flex items-center gap-4 h-full">
@@ -223,7 +212,16 @@ export default function BottomPanel() {
             onClick={() => setPanelTab('terminal')}
             className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'terminal' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
           >
+            <TerminalIcon className="w-3.5 h-3.5" />
             <span>TERMINAL</span>
+          </button>
+
+          <button
+            onClick={() => setPanelTab('input')}
+            className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'input' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
+          >
+            <Keyboard className="w-3.5 h-3.5" />
+            <span>CUSTOM INPUT (STDIN)</span>
           </button>
 
           <button
@@ -231,13 +229,6 @@ export default function BottomPanel() {
             className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'testcases' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
           >
             <span>TEST CASES ({passedCases}/{totalCases})</span>
-          </button>
-
-          <button
-            onClick={() => setPanelTab('input')}
-            className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'input' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
-          >
-            <span>OUTPUT (STDIN)</span>
           </button>
 
           {viewMode === 'student_lab' && student && (
@@ -307,85 +298,117 @@ export default function BottomPanel() {
       {/* Main Terminal Body */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Terminal Text Buffer */}
-        <div 
-          onClick={() => inputRef.current?.focus()}
-          className="flex-1 p-3 overflow-y-auto font-mono text-xs cursor-text"
-        >
-          {panelTab === 'terminal' && (
-            <div className="space-y-1">
-              {activeTerm?.logs.map((log, i) => (
-                <div key={i} className="whitespace-pre-wrap leading-relaxed">{log}</div>
-              ))}
+        {/* TAB 1: TERMINAL BUFFER */}
+        {panelTab === 'terminal' && (
+          <div 
+            onClick={() => inputRef.current?.focus()}
+            className="flex-1 p-3 overflow-y-auto font-mono text-xs cursor-text space-y-1"
+          >
+            {activeTerm?.logs.map((log, i) => (
+              <div key={i} className="whitespace-pre-wrap leading-relaxed">{log}</div>
+            ))}
 
-              <form onSubmit={handleCliSubmit} className="flex items-center gap-1.5 pt-1">
-                <span className="text-[#0078d4] font-bold">user@codelab:~$</span>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={cliInput}
-                  onChange={(e) => setCliInput(e.target.value)}
-                  placeholder="type command (e.g. gcc main.c -o main, run, ls, cat main.c, help)..."
-                  className={`flex-1 bg-transparent focus:outline-none text-xs font-mono caret-[#0078d4] ${isDark ? 'text-white' : 'text-gray-900'}`}
-                />
-              </form>
-
-              <div ref={terminalBottomRef} />
-            </div>
-          )}
-
-          {panelTab === 'testcases' && (
-            <div className="space-y-2">
-              {testResults.length === 0 ? (
-                <div className="opacity-70 text-center py-6 font-sans text-xs">
-                  Click <strong>"Tests"</strong> above or type <code className="text-[#0078d4] bg-gray-700/20 px-1 py-0.5 rounded font-mono">test</code> in terminal.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                  {testResults.map((r) => (
-                    <div 
-                      key={r.caseNumber}
-                      className={`p-2.5 rounded-lg border flex items-center justify-between text-xs ${r.passed ? (isDark ? 'bg-[#0f2417] border-[#107c41]' : 'bg-[#e6f4ea] border-[#34a853]') : (isDark ? 'bg-[#2a1215] border-[#f14c4c]' : 'bg-[#fce8e6] border-[#ea4335]')}`}
-                    >
-                      <div>
-                        <span className={`font-bold flex items-center gap-1.5 ${r.passed ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {r.passed ? '✓ PASSED' : '✗ FAILED'} &bull; Case #{r.caseNumber}
-                        </span>
-                        <div className="opacity-75 font-sans text-[11px] mt-1">
-                          In: <code className="font-mono text-white">{r.input}</code> &rarr; Out: <code className="font-mono text-cyan-300">{r.actual}</code>
-                        </div>
-                      </div>
-                      <span className="opacity-60 text-[10px]">{r.timeMs}ms</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {panelTab === 'input' && (
-            <div className="h-full flex flex-col">
-              <label className="text-[11px] opacity-70 font-sans mb-1">Standard Input buffer for execution:</label>
-              <textarea
-                value={customInput}
-                onChange={(e) => setCustomInput(e.target.value)}
-                placeholder="Enter standard input values (stdin) here..."
-                className={`flex-1 w-full p-2.5 text-xs font-mono rounded-lg border focus:outline-none resize-none ${isDark ? 'bg-[#141414] border-[#2b2b2b] text-gray-200' : 'bg-white border-gray-300 text-gray-800'}`}
+            <form onSubmit={handleCliSubmit} className="flex items-center gap-1.5 pt-1">
+              <span className="text-[#0078d4] font-bold">user@codelab:~$</span>
+              <input
+                ref={inputRef}
+                type="text"
+                value={cliInput}
+                onChange={(e) => setCliInput(e.target.value)}
+                placeholder="type command (e.g. run, run 7, gcc main.c -o main, ls, help)..."
+                className={`flex-1 bg-transparent focus:outline-none text-xs font-mono caret-[#0078d4] ${isDark ? 'text-white' : 'text-gray-900'}`}
               />
-            </div>
-          )}
+            </form>
 
-          {panelTab === 'anticheat' && (
-            <div className="space-y-2 font-sans text-xs p-1">
-              <div className="font-bold mb-1">Session Integrity & Anti-Cheat Audit:</div>
-              <div>&bull; Physical Computer: <span className="font-mono text-cyan-400 font-bold">{student?.machineNumber || 'PC-01'}</span></div>
-              <div>&bull; Sandbox Isolation: <span className="text-emerald-400 font-bold">Active (Zero Network)</span></div>
-              <div>&bull; Tab Switch Violations: <span className={(student?.tabSwitches || 0) > 0 ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>{student?.tabSwitches || 0} times</span></div>
-            </div>
-          )}
-        </div>
+            <div ref={terminalBottomRef} />
+          </div>
+        )}
 
-        {/* Right Sidebar Terminal Instances (clean and dynamic) */}
+        {/* TAB 2: CUSTOM INPUT (STDIN) */}
+        {panelTab === 'input' && (
+          <div className="flex-1 p-4 flex flex-col space-y-3 font-sans text-xs">
+            <div className="flex justify-between items-center">
+              <div>
+                <span className="font-bold text-sm">Standard Input (stdin)</span>
+                <p className="opacity-70 text-[11px] mt-0.5">
+                  Type the values here that your program will read using <code className="text-[#0078d4] font-mono">scanf("%d", &num)</code> or <code className="text-[#0078d4] font-mono">input()</code>:
+                </p>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1.5 font-mono text-xs">
+                <span className="opacity-60 text-[10px]">Quick:</span>
+                <button onClick={() => setCustomInput('10')} className="px-2 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white transition">10 (Even)</button>
+                <button onClick={() => setCustomInput('7')} className="px-2 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white transition">7 (Odd)</button>
+                <button onClick={() => setCustomInput('0')} className="px-2 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white transition">0 (Zero)</button>
+                <button onClick={() => setCustomInput('-5')} className="px-2 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white transition">-5 (Odd/Neg)</button>
+              </div>
+            </div>
+
+            <textarea
+              autoFocus
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              placeholder="Enter your input number(s) or text here..."
+              rows={4}
+              className={`w-full flex-1 p-3 text-sm font-mono rounded-lg border focus:outline-none focus:border-[#0078d4] resize-none ${isDark ? 'bg-[#141414] border-[#2b2b2b] text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+            />
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => {
+                  setPanelTab('terminal');
+                  handleRunCode();
+                }}
+                className="px-4 py-2 bg-[#0078d4] hover:bg-[#006cc1] text-white font-bold rounded-lg text-xs transition shadow flex items-center gap-2 cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 fill-white" /> Run Code with this Input
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: TEST CASES */}
+        {panelTab === 'testcases' && (
+          <div className="flex-1 p-3 overflow-y-auto space-y-2">
+            {testResults.length === 0 ? (
+              <div className="opacity-70 text-center py-6 font-sans text-xs">
+                Click <strong>"Tests"</strong> above or type <code className="text-[#0078d4] bg-gray-700/20 px-1 py-0.5 rounded font-mono">test</code> in terminal.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {testResults.map((r) => (
+                  <div 
+                    key={r.caseNumber}
+                    className={`p-2.5 rounded-lg border flex items-center justify-between text-xs ${r.passed ? (isDark ? 'bg-[#0f2417] border-[#107c41]' : 'bg-[#e6f4ea] border-[#34a853]') : (isDark ? 'bg-[#2a1215] border-[#f14c4c]' : 'bg-[#fce8e6] border-[#ea4335]')}`}
+                  >
+                    <div>
+                      <span className={`font-bold flex items-center gap-1.5 ${r.passed ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {r.passed ? '✓ PASSED' : '✗ FAILED'} &bull; Case #{r.caseNumber}
+                      </span>
+                      <div className="opacity-75 font-sans text-[11px] mt-1">
+                        In: <code className="font-mono text-white">{r.input}</code> &rarr; Out: <code className="font-mono text-cyan-300">{r.actual}</code>
+                      </div>
+                    </div>
+                    <span className="opacity-60 text-[10px]">{r.timeMs}ms</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: ANTI-CHEAT AUDIT */}
+        {panelTab === 'anticheat' && (
+          <div className="space-y-2 font-sans text-xs p-3">
+            <div className="font-bold mb-1">Session Integrity & Anti-Cheat Audit:</div>
+            <div>&bull; Physical Computer: <span className="font-mono text-cyan-400 font-bold">{student?.machineNumber || 'PC-01'}</span></div>
+            <div>&bull; Sandbox Isolation: <span className="text-emerald-400 font-bold">Active (Zero Network)</span></div>
+            <div>&bull; Tab Switch Violations: <span className={(student?.tabSwitches || 0) > 0 ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>{student?.tabSwitches || 0} times</span></div>
+          </div>
+        )}
+
+        {/* Right Sidebar Terminal Instances */}
         {showRightTerminalList && panelTab === 'terminal' && (
           <div className={`w-40 border-l flex flex-col shrink-0 p-1.5 space-y-1 font-mono text-[11px] select-none ${isDark ? 'bg-[#181818] border-[#2b2b2b]' : 'bg-[#f3f3f3] border-[#e7e7e7]'}`}>
             
