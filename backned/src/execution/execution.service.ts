@@ -114,7 +114,7 @@ export class ExecutionService {
           dockerImage = 'gcc:latest';
           fs.writeFileSync(path.join(jobDir, sourceFileName), code, 'utf-8');
           compileInsideDocker = 'gcc main.c -O2 -o main.out';
-          runInsideDocker = './main.out';
+          runInsideDocker = './main.out < input.txt';
           break;
 
         case 'cpp':
@@ -123,7 +123,7 @@ export class ExecutionService {
           dockerImage = 'gcc:latest';
           fs.writeFileSync(path.join(jobDir, sourceFileName), code, 'utf-8');
           compileInsideDocker = 'g++ main.cpp -O2 -o main.out';
-          runInsideDocker = './main.out';
+          runInsideDocker = './main.out < input.txt';
           break;
 
         case 'java':
@@ -131,7 +131,7 @@ export class ExecutionService {
           dockerImage = 'eclipse-temurin:21-alpine';
           fs.writeFileSync(path.join(jobDir, sourceFileName), code, 'utf-8');
           compileInsideDocker = 'javac Main.java';
-          runInsideDocker = 'java Main';
+          runInsideDocker = 'java Main < input.txt';
           break;
 
         case 'python':
@@ -141,7 +141,7 @@ export class ExecutionService {
           dockerImage = 'python:3.11-alpine';
           fs.writeFileSync(path.join(jobDir, sourceFileName), code, 'utf-8');
           compileInsideDocker = null;
-          runInsideDocker = 'python3 script.py';
+          runInsideDocker = 'python3 script.py < input.txt';
           break;
 
         default:
@@ -208,7 +208,7 @@ export class ExecutionService {
     // -m 128m (128MB RAM limit)
     // --pids-limit 20 (Fork bomb protection)
     // --read-only with tmpfs for scratch
-    const compileDockerArgs = [
+    const dockerBase = [
       'run', '--rm',
       '--network', 'none',
       '--cpus', '0.5',
@@ -218,21 +218,9 @@ export class ExecutionService {
       dockerImage,
     ];
 
-    const runDockerArgs = [
-      'run', '--rm', '-i',
-      '--network', 'none',
-      '--cpus', '0.5',
-      '-m', `${memoryLimitMb}m`,
-      '--memory-swap', `${memoryLimitMb}m`,
-      '--pids-limit', '20',
-      '-v', `${jobDir}:/workspace:rw`,
-      '-w', '/workspace',
-      dockerImage,
-    ];
-
     // Step A: Compilation inside Docker
     if (compileCmd) {
-      const compileArgs = [...compileDockerArgs, 'sh', '-c', compileCmd];
+      const compileArgs = [...dockerBase, 'sh', '-c', compileCmd];
       const compileRes = await this.runProcess('docker', compileArgs, jobDir, 8000);
       if (compileRes.exitCode !== 0) {
         return {
@@ -243,8 +231,6 @@ export class ExecutionService {
       }
     }
 
-    const binaryArgs = runCmd.split(' ');
-
     // Step B: Evaluation of Test Cases
     if (testCases && testCases.length > 0) {
       const results = [];
@@ -252,8 +238,14 @@ export class ExecutionService {
 
       for (let i = 0; i < testCases.length; i++) {
         const tc = testCases[i];
-        const runArgs = [...runDockerArgs, ...binaryArgs];
-        const runRes = await this.runProcess('docker', runArgs, jobDir, timeLimitMs, tc.inputData || '');
+        fs.writeFileSync(
+          path.join(jobDir, 'input.txt'),
+          tc.inputData != null && tc.inputData !== '' ? (String(tc.inputData).endsWith('\n') ? String(tc.inputData) : String(tc.inputData) + '\n') : '',
+          'utf-8'
+        );
+
+        const runArgs = [...dockerBase, 'sh', '-c', runCmd];
+        const runRes = await this.runProcess('docker', runArgs, jobDir, timeLimitMs);
 
         if (runRes.timedOut) {
           results.push({
@@ -297,9 +289,15 @@ export class ExecutionService {
       };
     }
 
-    // Single Custom Input Run
-    const runArgs = [...runDockerArgs, ...binaryArgs];
-    const runRes = await this.runProcess('docker', runArgs, jobDir, timeLimitMs, input);
+    // Single Custom Input Run: Write input.txt for redirect
+    fs.writeFileSync(
+      path.join(jobDir, 'input.txt'),
+      input != null && input !== '' ? (String(input).endsWith('\n') ? String(input) : String(input) + '\n') : '',
+      'utf-8'
+    );
+
+    const runArgs = [...dockerBase, 'sh', '-c', runCmd];
+    const runRes = await this.runProcess('docker', runArgs, jobDir, timeLimitMs);
     return {
       success: runRes.exitCode === 0,
       verdict: runRes.exitCode === 0 ? 'SUCCESS' : 'RUNTIME_ERROR',

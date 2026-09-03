@@ -59,21 +59,22 @@ function runInDocker(
     let srcFile = 'main.c';
     let image = 'gcc:latest';
     let compileCmd = 'gcc main.c -O2 -o main.out';
-    let runCmd = './main.out';
+    let runCmd = './main.out < input.txt';
 
     if (lang === 'cpp' || lang === 'c++') {
       srcFile = 'main.cpp';
       image = 'gcc:latest';
       compileCmd = 'g++ main.cpp -O2 -o main.out';
-      runCmd = './main.out';
+      runCmd = './main.out < input.txt';
     } else if (lang === 'python' || lang === 'py') {
       srcFile = 'script.py';
       image = 'python:3.11-alpine';
       compileCmd = '';
-      runCmd = 'python3 script.py';
+      runCmd = 'python3 script.py < input.txt';
     }
 
     fs.writeFileSync(path.join(jobDir, srcFile), code, 'utf-8');
+    fs.writeFileSync(path.join(jobDir, 'input.txt'), input != null && input !== '' ? (String(input).endsWith('\n') ? String(input) : String(input) + '\n') : '', 'utf-8');
 
     const dockerBase = [
       'run', '--rm',
@@ -99,10 +100,10 @@ function runInDocker(
             durationMs: Date.now() - startTime,
           });
         }
-        executeBinary(dockerBase, runCmd, input, timeLimitMs, startTime, resolve);
+        executeBinary(dockerBase, runCmd, timeLimitMs, startTime, resolve);
       });
     } else {
-      executeBinary(dockerBase, runCmd, input, timeLimitMs, startTime, resolve);
+      executeBinary(dockerBase, runCmd, timeLimitMs, startTime, resolve);
     }
   });
 }
@@ -110,33 +111,23 @@ function runInDocker(
 function executeBinary(
   dockerBase: string[],
   runCmd: string,
-  input: string,
   timeLimitMs: number,
   startTime: number,
   resolve: (val: any) => void
 ) {
-  // Pass -i for interactive execution so stdin pipe is connected, and execute binary directly
-  const runArgs = runCmd.split(' ');
-  const child = spawn('docker', ['run', '--rm', '-i', ...dockerBase.slice(2), ...runArgs]);
+  const child = spawn('docker', [...dockerBase, 'sh', '-c', runCmd]);
   let stdout = '';
   let stderr = '';
 
   child.stdout?.on('data', (d) => { stdout += d.toString(); });
   child.stderr?.on('data', (d) => { stderr += d.toString(); });
 
-  if (child.stdin) {
-    if (input != null && input !== '') {
-      child.stdin.write(String(input).endsWith('\n') ? String(input) : String(input) + '\n');
-    }
-    try { child.stdin.end(); } catch (_) {}
-  }
-
   const timer = setTimeout(() => {
     try { child.kill('SIGKILL'); } catch (_) {}
     resolve({
       success: false,
       output: stdout,
-      error: 'Time Limit Exceeded (> 3.0s)',
+      error: `Time Limit Exceeded (> ${timeLimitMs / 1000}s)`,
       durationMs: Date.now() - startTime,
     });
   }, timeLimitMs);
