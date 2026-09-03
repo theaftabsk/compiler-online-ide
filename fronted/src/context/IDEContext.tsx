@@ -458,7 +458,11 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         const res = await executeCodeLive(language, code, tc.inputData);
         const actualTrimmed = (res.output || '').trim();
         const expectedTrimmed = tc.expectedOutput.trim();
-        const passed = actualTrimmed.includes(expectedTrimmed) || actualTrimmed === expectedTrimmed;
+        
+        // Smart matching: check if output contains the expected answer (e.g. "The number is Positive" contains "Positive")
+        const passed = 
+          actualTrimmed.toLowerCase().includes(expectedTrimmed.toLowerCase()) ||
+          expectedTrimmed.toLowerCase().includes(actualTrimmed.toLowerCase());
 
         evaluated.push({
           caseNumber: i + 1,

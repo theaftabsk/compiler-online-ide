@@ -218,35 +218,35 @@ export default function BottomPanel() {
       <div className={`h-8 px-3 flex items-center justify-between border-b text-[11px] font-sans tracking-wide select-none shrink-0 ${isDark ? 'bg-[#181818] border-[#2b2b2b] text-[#969696]' : 'bg-[#f3f3f3] border-[#e7e7e7] text-[#616161]'}`}>
         
         {/* Left Tabs */}
-        <div className="flex items-center gap-5 h-full">
+        <div className="flex items-center gap-4 h-full">
           <button
             onClick={() => setPanelTab('terminal')}
-            className={`h-full flex items-center gap-1.5 transition uppercase text-[11px] font-bold ${panelTab === 'terminal' ? (isDark ? 'text-white border-b-2 border-[#0078d4]' : 'text-black border-b-2 border-[#0078d4]') : 'hover:text-white'}`}
+            className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'terminal' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
           >
-            <span>Terminal</span>
+            <span>TERMINAL</span>
           </button>
 
           <button
             onClick={() => setPanelTab('testcases')}
-            className={`h-full flex items-center gap-1.5 transition uppercase text-[11px] font-bold ${panelTab === 'testcases' ? (isDark ? 'text-white border-b-2 border-[#0078d4]' : 'text-black border-b-2 border-[#0078d4]') : 'hover:text-white'}`}
+            className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'testcases' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
           >
-            <span>Test Cases ({passedCases}/{totalCases})</span>
+            <span>TEST CASES ({passedCases}/{totalCases})</span>
           </button>
 
           <button
             onClick={() => setPanelTab('input')}
-            className={`h-full flex items-center gap-1.5 transition uppercase text-[11px] font-bold ${panelTab === 'input' ? (isDark ? 'text-white border-b-2 border-[#0078d4]' : 'text-black border-b-2 border-[#0078d4]') : 'hover:text-white'}`}
+            className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'input' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
           >
-            <span>Output (Stdin)</span>
+            <span>OUTPUT (STDIN)</span>
           </button>
 
           {viewMode === 'student_lab' && student && (
             <button
               onClick={() => setPanelTab('anticheat')}
-              className={`h-full flex items-center gap-1.5 transition uppercase text-[11px] font-bold ${panelTab === 'anticheat' ? (isDark ? 'text-white border-b-2 border-[#0078d4]' : 'text-black border-b-2 border-[#0078d4]') : 'hover:text-white'}`}
+              className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'anticheat' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
             >
               <span className={student.tabSwitches > 0 ? 'text-rose-400 font-bold' : ''}>
-                Anti-Cheat ({student.tabSwitches})
+                ANTI-CHEAT ({student.tabSwitches})
               </span>
             </button>
           )}
