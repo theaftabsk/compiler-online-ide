@@ -8,9 +8,7 @@ import {
   Minimize2, 
   ChevronDown,
   Terminal as TerminalIcon,
-  Plus,
-  Play,
-  Keyboard
+  Plus
 } from 'lucide-react';
 import { useIDE } from '@/context/IDEContext';
 
@@ -116,7 +114,7 @@ export default function BottomPanel() {
     }
 
     if (cmd === 'ls' || cmd === 'dir') {
-      currentLogs.push('main.c  problem.md  input.txt  Makefile  main.out');
+      currentLogs.push('main.c  problem.md  Makefile  main.out');
       currentLogs.push('user@codelab:~$ ');
       updateLogs(currentLogs);
       setCliInput('');
@@ -203,8 +201,8 @@ export default function BottomPanel() {
         </div>
       )}
 
-      {/* VS Code Terminal Header */}
-      <div className={`h-8 px-3 flex items-center justify-between border-b text-[11px] font-sans tracking-wide select-none shrink-0 ${isDark ? 'bg-[#181818] border-[#2b2b2b] text-[#969696]' : 'bg-[#f3f3f3] border-[#e7e7e7]'}`}>
+      {/* VS Code Terminal Header (Clean: TERMINAL + TEST CASES) */}
+      <div className={`h-8 px-3 flex items-center justify-between border-b text-[11px] font-sans tracking-wide select-none shrink-0 ${isDark ? 'bg-[#181818] border-[#2b2b2b] text-[#969696]' : 'bg-[#f3f3f3] border-[#e7e7e7] text-[#616161]'}`}>
         
         {/* Left Tabs */}
         <div className="flex items-center gap-4 h-full">
@@ -214,14 +212,6 @@ export default function BottomPanel() {
           >
             <TerminalIcon className="w-3.5 h-3.5" />
             <span>TERMINAL</span>
-          </button>
-
-          <button
-            onClick={() => setPanelTab('input')}
-            className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'input' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
-          >
-            <Keyboard className="w-3.5 h-3.5" />
-            <span>CUSTOM INPUT (STDIN)</span>
           </button>
 
           <button
@@ -324,51 +314,7 @@ export default function BottomPanel() {
           </div>
         )}
 
-        {/* TAB 2: CUSTOM INPUT (STDIN) */}
-        {panelTab === 'input' && (
-          <div className="flex-1 p-4 flex flex-col space-y-3 font-sans text-xs">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="font-bold text-sm">Standard Input (stdin)</span>
-                <p className="opacity-70 text-[11px] mt-0.5">
-                  Type the values here that your program will read using <code className="text-[#0078d4] font-mono">scanf("%d", &num)</code> or <code className="text-[#0078d4] font-mono">input()</code>:
-                </p>
-              </div>
-
-              {/* Quick Presets */}
-              <div className="flex items-center gap-1.5 font-mono text-xs">
-                <span className="opacity-60 text-[10px]">Quick:</span>
-                <button onClick={() => setCustomInput('10')} className="px-2 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white transition">10 (Even)</button>
-                <button onClick={() => setCustomInput('7')} className="px-2 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white transition">7 (Odd)</button>
-                <button onClick={() => setCustomInput('0')} className="px-2 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white transition">0 (Zero)</button>
-                <button onClick={() => setCustomInput('-5')} className="px-2 py-0.5 rounded border hover:bg-[#0078d4] hover:text-white transition">-5 (Odd/Neg)</button>
-              </div>
-            </div>
-
-            <textarea
-              autoFocus
-              value={customInput}
-              onChange={(e) => setCustomInput(e.target.value)}
-              placeholder="Enter your input number(s) or text here..."
-              rows={4}
-              className={`w-full flex-1 p-3 text-sm font-mono rounded-lg border focus:outline-none focus:border-[#0078d4] resize-none ${isDark ? 'bg-[#141414] border-[#2b2b2b] text-white' : 'bg-white border-gray-300 text-gray-900'}`}
-            />
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => {
-                  setPanelTab('terminal');
-                  handleRunCode();
-                }}
-                className="px-4 py-2 bg-[#0078d4] hover:bg-[#006cc1] text-white font-bold rounded-lg text-xs transition shadow flex items-center gap-2 cursor-pointer"
-              >
-                <Play className="w-3.5 h-3.5 fill-white" /> Run Code with this Input
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: TEST CASES */}
+        {/* TAB 2: TEST CASES */}
         {panelTab === 'testcases' && (
           <div className="flex-1 p-3 overflow-y-auto space-y-2">
             {testResults.length === 0 ? (
@@ -398,7 +344,7 @@ export default function BottomPanel() {
           </div>
         )}
 
-        {/* TAB 4: ANTI-CHEAT AUDIT */}
+        {/* TAB 3: ANTI-CHEAT AUDIT */}
         {panelTab === 'anticheat' && (
           <div className="space-y-2 font-sans text-xs p-3">
             <div className="font-bold mb-1">Session Integrity & Anti-Cheat Audit:</div>
@@ -410,7 +356,7 @@ export default function BottomPanel() {
 
         {/* Right Sidebar Terminal Instances */}
         {showRightTerminalList && panelTab === 'terminal' && (
-          <div className={`w-40 border-l flex flex-col shrink-0 p-1.5 space-y-1 font-mono text-[11px] select-none ${isDark ? 'bg-[#181818] border-[#2b2b2b]' : 'bg-[#f3f3f3] border-[#e7e7e7]'}`}>
+          <div className={`w-40 border-l flex flex-col shrink-0 p-1.5 space-y-1 font-mono text-[11px] select-none ${isDark ? 'bg-[#181818] border-[#2b2b2b]' : 'bg-[#f3f3f3] border-[#e7e7e7]'}`}
             
             <div className="text-[10px] font-bold opacity-50 px-2 py-0.5 uppercase">
               Terminals ({terminals.length})
