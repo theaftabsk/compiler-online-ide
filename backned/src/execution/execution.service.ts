@@ -298,7 +298,7 @@ export class ExecutionService {
   }
 
   /**
-   * Native sandbox fallback with strict process monitoring
+   * Real Native sandbox execution with strict process monitoring
    */
   private async executeInNativeSandbox(options: {
     jobDir: string;
@@ -308,29 +308,109 @@ export class ExecutionService {
     input: string;
     timeLimitMs: number;
   }) {
-    const { testCases, input } = options;
+    const { jobDir, language, code, testCases, input, timeLimitMs } = options;
+    const lang = language.toLowerCase();
 
-    if (testCases && testCases.length > 0) {
-      const results = testCases.map((tc, idx) => {
-        const num = parseInt(tc.inputData);
-        let actual = !isNaN(num) ? (num > 0 ? 'Positive' : (num < 0 ? 'Negative' : 'Zero')) : tc.expectedOutput;
-        const passed = actual === tc.expectedOutput;
+    let compileCmd: string | null = null;
+    let runCmd: string;
+    let runArgs: string[];
+    const isWin = process.platform === 'win32';
+
+    if (lang === 'c') {
+      const src = path.join(jobDir, 'main.c');
+      const out = path.join(jobDir, isWin ? 'main.exe' : 'main.out');
+      fs.writeFileSync(src, code, 'utf-8');
+      compileCmd = `gcc "${src}" -O2 -o "${out}"`;
+      runCmd = out;
+      runArgs = [];
+    } else if (lang === 'cpp' || lang === 'c++') {
+      const src = path.join(jobDir, 'main.cpp');
+      const out = path.join(jobDir, isWin ? 'main.exe' : 'main.out');
+      fs.writeFileSync(src, code, 'utf-8');
+      compileCmd = `g++ "${src}" -O2 -o "${out}"`;
+      runCmd = out;
+      runArgs = [];
+    } else if (lang === 'python' || lang === 'py') {
+      const src = path.join(jobDir, 'script.py');
+      fs.writeFileSync(src, code, 'utf-8');
+      compileCmd = null;
+      runCmd = isWin ? 'python' : 'python3';
+      runArgs = [src];
+    } else if (lang === 'java') {
+      const src = path.join(jobDir, 'Main.java');
+      fs.writeFileSync(src, code, 'utf-8');
+      compileCmd = `javac "${src}"`;
+      runCmd = 'java';
+      runArgs = ['-cp', jobDir, 'Main'];
+    } else {
+      return {
+        success: false,
+        verdict: 'UNSUPPORTED_LANGUAGE',
+        error: `Language ${language} is not supported.`,
+      };
+    }
+
+    // Step 1: Real Native Compile
+    if (compileCmd) {
+      const compRes = await new Promise<{ exitCode: number; stdout: string; stderr: string }>((res) => {
+        exec(compileCmd!, { cwd: jobDir, timeout: 8000 }, (error, stdout, stderr) => {
+          res({ exitCode: error ? (error.code || 1) : 0, stdout, stderr });
+        });
+      });
+
+      if (compRes.exitCode !== 0) {
         return {
-          caseNumber: idx + 1,
-          passed,
-          verdict: passed ? 'ACCEPTED' : 'WRONG_ANSWER',
+          success: false,
+          verdict: 'COMPILATION_ERROR',
+          error: compRes.stderr || compRes.stdout || 'Compilation failed',
+        };
+      }
+    }
+
+    // Step 2: Evaluation of Test Cases
+    if (testCases && testCases.length > 0) {
+      const results = [];
+      let allPassed = true;
+
+      for (let i = 0; i < testCases.length; i++) {
+        const tc = testCases[i];
+        const runRes = await this.runProcess(runCmd, runArgs, jobDir, timeLimitMs, tc.inputData || '');
+
+        if (runRes.timedOut) {
+          results.push({
+            caseNumber: i + 1,
+            passed: false,
+            verdict: 'TIME_LIMIT_EXCEEDED',
+            input: tc.inputData,
+            expected: tc.expectedOutput,
+            actual: `Time Limit Exceeded (> ${timeLimitMs / 1000}s)`,
+            isHidden: !!tc.isHidden,
+          });
+          allPassed = false;
+          continue;
+        }
+
+        const actual = (runRes.stdout || '').trim().replace(/\r\n/g, '\n');
+        const expected = (tc.expectedOutput || '').trim().replace(/\r\n/g, '\n');
+        const isMatch = actual === expected || actual.toLowerCase().includes(expected.toLowerCase());
+        if (!isMatch) allPassed = false;
+
+        results.push({
+          caseNumber: i + 1,
+          passed: isMatch,
+          verdict: isMatch ? 'ACCEPTED' : 'WRONG_ANSWER',
           input: tc.inputData,
           expected: tc.expectedOutput,
           actual,
-          executionTimeMs: 14 + idx * 2,
+          executionTimeMs: runRes.durationMs,
           isHidden: !!tc.isHidden,
-        };
-      });
+        });
+      }
 
       const passedCount = results.filter(r => r.passed).length;
       return {
         success: true,
-        verdict: passedCount === testCases.length ? 'ACCEPTED' : 'WRONG_ANSWER',
+        verdict: allPassed ? 'ACCEPTED' : 'WRONG_ANSWER',
         passedCount,
         totalCount: testCases.length,
         score: Math.round((passedCount / testCases.length) * 100),
@@ -338,11 +418,14 @@ export class ExecutionService {
       };
     }
 
+    // Step 3: Single Run
+    const runRes = await this.runProcess(runCmd, runArgs, jobDir, timeLimitMs, input);
     return {
-      success: true,
-      verdict: 'SUCCESS',
-      output: `[Isolated Sandbox Execution]\nProgram finished with exit code 0.\nInput: ${input || 'None'}`,
-      durationMs: 15,
+      success: runRes.exitCode === 0,
+      verdict: runRes.exitCode === 0 ? 'SUCCESS' : 'RUNTIME_ERROR',
+      output: runRes.stdout || '(No Output)',
+      error: runRes.stderr || '',
+      durationMs: runRes.durationMs,
     };
   }
 
@@ -358,9 +441,11 @@ export class ExecutionService {
       child.stdout?.on('data', (d) => { stdout += d.toString(); });
       child.stderr?.on('data', (d) => { stderr += d.toString(); });
 
-      if (stdinData && child.stdin) {
-        child.stdin.write(stdinData);
-        child.stdin.end();
+      if (child.stdin) {
+        if (stdinData != null && stdinData !== '') {
+          child.stdin.write(String(stdinData).endsWith('\n') ? String(stdinData) : String(stdinData) + '\n');
+        }
+        try { child.stdin.end(); } catch (_) {}
       }
 
       const timer = setTimeout(() => {

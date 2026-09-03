@@ -122,9 +122,11 @@ function executeBinary(
   child.stdout?.on('data', (d) => { stdout += d.toString(); });
   child.stderr?.on('data', (d) => { stderr += d.toString(); });
 
-  if (input && child.stdin) {
-    child.stdin.write(input);
-    child.stdin.end();
+  if (child.stdin) {
+    if (input != null && input !== '') {
+      child.stdin.write(String(input).endsWith('\n') ? String(input) : String(input) + '\n');
+    }
+    try { child.stdin.end(); } catch (_) {}
   }
 
   const timer = setTimeout(() => {
@@ -179,9 +181,11 @@ function runNative(
         child.stdout.on('data', (d) => { out += d.toString(); });
         child.stderr.on('data', (d) => { err += d.toString(); });
 
-        if (input && child.stdin) {
-          child.stdin.write(input);
-          child.stdin.end();
+        if (child.stdin) {
+          if (input != null && input !== '') {
+            child.stdin.write(String(input).endsWith('\n') ? String(input) : String(input) + '\n');
+          }
+          try { child.stdin.end(); } catch (_) {}
         }
 
         const timer = setTimeout(() => {
@@ -203,9 +207,11 @@ function runNative(
       child.stdout.on('data', (d) => { out += d.toString(); });
       child.stderr.on('data', (d) => { err += d.toString(); });
 
-      if (input && child.stdin) {
-        child.stdin.write(input);
-        child.stdin.end();
+      if (child.stdin) {
+        if (input != null && input !== '') {
+          child.stdin.write(String(input).endsWith('\n') ? String(input) : String(input) + '\n');
+        }
+        try { child.stdin.end(); } catch (_) {}
       }
 
       child.on('close', (code) => {

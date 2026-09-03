@@ -8,7 +8,9 @@ import {
   Minimize2, 
   ChevronDown,
   Terminal as TerminalIcon,
-  Plus
+  Plus,
+  CheckCircle2,
+  ShieldAlert
 } from 'lucide-react';
 import { useIDE } from '@/context/IDEContext';
 
@@ -20,12 +22,8 @@ export default function BottomPanel() {
     panelTab, 
     setPanelTab, 
     testResults, 
-    viewMode, 
     student,
     activeSession,
-    code,
-    language,
-    activeFileTab,
     terminals,
     setTerminals,
     activeTermId,
@@ -33,7 +31,10 @@ export default function BottomPanel() {
     handleAddNewTerminal,
     handleKillTerminal,
     handleRunCode,
-    handleRunTests
+    waitingForStdin,
+    setWaitingForStdin,
+    pendingPromptText,
+    isRunning
   } = useIDE();
 
   const [panelHeight, setPanelHeight] = useState<number>(240);
@@ -41,10 +42,6 @@ export default function BottomPanel() {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showRightTerminalList, setShowRightTerminalList] = useState<boolean>(true);
   const [cliInput, setCliInput] = useState<string>('');
-  
-  // Interactive Live STDIN state (waiting for user to type input like in real VS Code)
-  const [waitingForStdin, setWaitingForStdin] = useState<boolean>(false);
-  const [pendingPromptText, setPendingPromptText] = useState<string>('');
 
   const terminalBottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,49 +97,17 @@ export default function BottomPanel() {
     const userInput = cliInput;
     setCliInput('');
 
-    // CASE 1: The program was paused waiting for user's manual input (like VS Code scanf)
+    // CASE 1: The program was waiting for user's manual input (VS Code scanf style)
     if (waitingForStdin) {
-      setWaitingForStdin(false);
-      
       // Echo user's typed input into the log line
       const updatedLogs = [...(activeTerm?.logs || [])];
       if (updatedLogs.length > 0) {
         updatedLogs[updatedLogs.length - 1] = `${pendingPromptText}${userInput}`;
       }
-
       setTerminals(prev => prev.map(t => t.id === activeTermId ? { ...t, logs: updatedLogs } : t));
 
       // Execute code with user's manual input
-      try {
-        const { executeCodeLive } = await import('@/utils/codeRunner');
-        const res = await executeCodeLive(language, code, userInput);
-        
-        let out = res.output || '';
-        // Remove prompt prefix if already printed
-        if (pendingPromptText && out.startsWith(pendingPromptText.trim())) {
-          out = out.replace(pendingPromptText.trim(), '').trim();
-        }
-
-        setTerminals(prev => prev.map(t => {
-          if (t.id === activeTermId) {
-            return {
-              ...t,
-              logs: [
-                ...t.logs,
-                out || (res.error ? `Error: ${res.error}` : ''),
-                `[Process completed in ${res.durationMs}ms with exit code 0]`,
-                'user@codelab:~$ '
-              ]
-            };
-          }
-          return t;
-        }));
-      } catch (err: any) {
-        setTerminals(prev => prev.map(t => t.id === activeTermId ? {
-          ...t,
-          logs: [...t.logs, `Runtime Error: ${err.message}`, 'user@codelab:~$ ']
-        } : t));
-      }
+      await handleRunCode(userInput);
       return;
     }
 
@@ -178,131 +143,39 @@ export default function BottomPanel() {
       return;
     }
 
+    if (cmd === 'help') {
+      currentLogs.push('Available Commands:');
+      currentLogs.push('  run [input]    - Compile and execute the active code file');
+      currentLogs.push('  ls             - List project workspace files');
+      currentLogs.push('  clear          - Clear terminal buffer');
+      currentLogs.push('  whoami         - Print current sandbox user');
+      currentLogs.push('user@codelab:~$ ');
+      updateLogs(currentLogs);
+      return;
+    }
+
     if (cmd === 'whoami') {
-      currentLogs.push(student ? `${student.name.toLowerCase().replace(/\s+/g, '_')} (${student.machineNumber})` : 'codelab-user');
+      currentLogs.push(`user: ${student ? student.name : 'guest-student'} (Machine: ${student ? student.machineNumber : 'PC-01'})`);
       currentLogs.push('user@codelab:~$ ');
       updateLogs(currentLogs);
       return;
     }
 
-    if (cmd === 'cat' && parts[1]) {
-      currentLogs.push(code);
-      currentLogs.push('user@codelab:~$ ');
-      updateLogs(currentLogs);
-      return;
-    }
-
-    // Run command triggered from terminal
-    if (
-      cmd === 'run' || 
-      cmd === './main' || 
-      cmd === './main.out' ||
-      cmd.startsWith('gcc') || 
-      cmd.startsWith('python')
-    ) {
+    if (cmd === 'run') {
+      // If user typed 'run 10' -> pass '10' directly
+      // If user typed 'run' -> trigger interactive run
       if (arg) {
-        // Direct argument supplied (e.g. run 7)
-        runDirectlyWithInput(arg);
+        await handleRunCode(arg);
       } else {
-        // Check if code has scanf / input
-        startInteractiveRun();
+        await handleRunCode();
       }
       return;
     }
 
-    if (cmd === 'test') {
-      handleRunTests();
-      return;
-    }
-
-    if (cmd === 'help') {
-      currentLogs.push(
-        'Available Shell Commands:\n  • run                  : Run code interactively (prompt will ask for input)\n  • run <input>          : Run code with direct input\n  • gcc main.c -o main   : Compile C program\n  • python script.py     : Run Python script\n  • ls / dir             : List files\n  • clear / cls          : Clear terminal buffer'
-      );
-      currentLogs.push('user@codelab:~$ ');
-      updateLogs(currentLogs);
-      return;
-    }
-
-    currentLogs.push(`bash: ${raw}: command not found. Type "help" for valid commands.`);
+    // Default: bash unrecognized command
+    currentLogs.push(`bash: ${cmd}: command not found. Type 'run' or 'help'`);
     currentLogs.push('user@codelab:~$ ');
     updateLogs(currentLogs);
-  };
-
-  // Start Interactive Run (Pauses at scanf prompt like real VS Code)
-  const startInteractiveRun = () => {
-    const hasScanf = code.includes('scanf(') || code.includes('input(') || code.includes('cin >>');
-    
-    // Extract prompt before scanf if any (e.g. printf("Enter a number: ");)
-    let promptText = '';
-    const promptMatch = code.match(/printf\s*\(\s*["']([^"']+)["']\s*\)/);
-    if (promptMatch && hasScanf) {
-      promptText = promptMatch[1].replace(/\\n/g, '\n');
-    }
-
-    if (hasScanf) {
-      // Pause in terminal waiting for user's manual keyboard input
-      setPendingPromptText(promptText);
-      setWaitingForStdin(true);
-
-      setTerminals(prev => prev.map(t => {
-        if (t.id === activeTermId) {
-          return {
-            ...t,
-            logs: [
-              ...t.logs,
-              `user@codelab:~$ gcc -O2 ${activeFileTab} -o main && ./main`,
-              promptText || 'Input: '
-            ]
-          };
-        }
-        return t;
-      }));
-    } else {
-      // Direct run without input
-      runDirectlyWithInput('');
-    }
-  };
-
-  const runDirectlyWithInput = async (inputStr: string) => {
-    setTerminals(prev => prev.map(t => {
-      if (t.id === activeTermId) {
-        return {
-          ...t,
-          logs: [
-            ...t.logs,
-            `user@codelab:~$ gcc -O2 ${activeFileTab} -o main && ./main`,
-            '[Compiling and executing in Docker sandbox...]'
-          ]
-        };
-      }
-      return t;
-    }));
-
-    try {
-      const { executeCodeLive } = await import('@/utils/codeRunner');
-      const res = await executeCodeLive(language, code, inputStr);
-      
-      setTerminals(prev => prev.map(t => {
-        if (t.id === activeTermId) {
-          return {
-            ...t,
-            logs: [
-              ...t.logs,
-              res.output || (res.error ? `Error: ${res.error}` : '(Execution completed)'),
-              `[Process completed in ${res.durationMs}ms with exit code ${res.exitCode}]`,
-              'user@codelab:~$ '
-            ]
-          };
-        }
-        return t;
-      }));
-    } catch (err: any) {
-      setTerminals(prev => prev.map(t => t.id === activeTermId ? {
-        ...t,
-        logs: [...t.logs, `Runtime Error: ${err.message}`, 'user@codelab:~$ ']
-      } : t));
-    }
   };
 
   const currentHeight = isFullscreen ? 'calc(100vh - 75px)' : `${panelHeight}px`;
@@ -310,55 +183,51 @@ export default function BottomPanel() {
   return (
     <div 
       style={{ height: currentHeight }}
-      className={`flex flex-col border-t shrink-0 relative transition-[height] ${isDragging ? 'transition-none select-none' : 'duration-150'} ${isDark ? 'bg-[#181818] border-[#2b2b2b]' : 'bg-[#f8f8f8] border-[#e7e7e7]'}`}
+      className={`flex flex-col border-t shrink-0 relative select-none ${isDragging ? 'transition-none' : 'transition-[height] duration-100'} ${isDark ? 'bg-[#181818] border-[#2b2b2b]' : 'bg-[#f3f3f3] border-[#e0e0e0]'}`}
     >
-      
-      {/* Dynamic Draggable Top Border Handle */}
+      {/* Drag Handle */}
       {!isFullscreen && (
         <div 
           onMouseDown={handleMouseDown}
-          title="Drag up or down to resize terminal height"
-          className="h-2 w-full bg-transparent hover:bg-[#0078d4] active:bg-[#0078d4] cursor-row-resize absolute -top-1 left-0 z-30 transition-colors flex items-center justify-center group"
-        >
-          <div className="w-10 h-1 rounded-full bg-gray-500/30 group-hover:bg-white transition-colors" />
-        </div>
+          className="h-1.5 w-full cursor-row-resize absolute -top-0.5 left-0 z-20 hover:bg-[#0078d4] transition-colors"
+        />
       )}
 
-      {/* VS Code Terminal Header (TERMINAL + TEST CASES) */}
-      <div className={`h-8 px-3 flex items-center justify-between border-b text-[11px] font-sans tracking-wide select-none shrink-0 ${isDark ? 'bg-[#181818] border-[#2b2b2b] text-[#969696]' : 'bg-[#f3f3f3] border-[#e7e7e7] text-[#616161]'}`}>
+      {/* Terminal Top Bar */}
+      <div className={`h-8 flex items-center justify-between px-3 border-b shrink-0 ${isDark ? 'bg-[#181818] border-[#2b2b2b]' : 'bg-[#f3f3f3] border-[#e0e0e0]'}`}>
         
-        {/* Left Tabs */}
-        <div className="flex items-center gap-4 h-full">
+        {/* Tabs */}
+        <div className="flex items-center gap-1 h-full">
           <button
             onClick={() => setPanelTab('terminal')}
-            className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'terminal' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
+            className={`h-full px-3 text-[11px] font-bold border-b-2 transition flex items-center gap-1.5 ${panelTab === 'terminal' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-gray-200'}`}
           >
-            <TerminalIcon className="w-3.5 h-3.5" />
-            <span>TERMINAL</span>
+            <TerminalIcon className="w-3 h-3" />
+            TERMINAL
+            {waitingForStdin && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />}
           </button>
 
           <button
             onClick={() => setPanelTab('testcases')}
-            className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'testcases' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
+            className={`h-full px-3 text-[11px] font-bold border-b-2 transition flex items-center gap-1.5 ${panelTab === 'testcases' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-gray-200'}`}
           >
-            <span>TEST CASES ({passedCases}/{totalCases})</span>
+            <CheckCircle2 className="w-3 h-3" />
+            TEST CASES ({passedCases}/{totalCases})
           </button>
 
-          {viewMode === 'student_lab' && student && (
+          {student && (
             <button
               onClick={() => setPanelTab('anticheat')}
-              className={`h-full flex items-center gap-1.5 transition text-[11px] font-bold px-1 border-b-2 ${panelTab === 'anticheat' ? 'text-[#0078d4] border-[#0078d4]' : 'text-gray-400 border-transparent hover:text-white'}`}
+              className={`h-full px-3 text-[11px] font-bold border-b-2 transition flex items-center gap-1.5 ${panelTab === 'anticheat' ? 'text-amber-400 border-amber-400' : 'text-gray-400 border-transparent hover:text-gray-200'}`}
             >
-              <span className={student.tabSwitches > 0 ? 'text-rose-400 font-bold' : ''}>
-                ANTI-CHEAT ({student.tabSwitches})
-              </span>
+              <ShieldAlert className="w-3 h-3" />
+              INTEGRITY
             </button>
           )}
         </div>
 
-        {/* Right Action Icons (+ New Terminal, v Toggle, Clear, Maximize, Close) */}
-        <div className="flex items-center gap-2">
-          
+        {/* Right Action Icons */}
+        <div className="flex items-center gap-1.5">
           {/* + New Terminal */}
           <button
             onClick={handleAddNewTerminal}
@@ -412,7 +281,7 @@ export default function BottomPanel() {
       {/* Main Terminal Body */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* TAB 1: TERMINAL BUFFER (Interactive Live Terminal with manual STDIN prompt) */}
+        {/* TAB 1: TERMINAL BUFFER */}
         {panelTab === 'terminal' && (
           <div 
             onClick={() => inputRef.current?.focus()}
@@ -425,8 +294,8 @@ export default function BottomPanel() {
             {/* Interactive Live Input Prompt */}
             <form onSubmit={handleCliSubmit} className="flex items-center gap-1.5 pt-1">
               {waitingForStdin ? (
-                // Waiting for user to type input value (e.g. 7 or 12)
-                <span className="text-amber-400 font-bold animate-pulse">&gt;&gt;&gt;</span>
+                // Waiting for user to type input (e.g. 10 or 7)
+                <span className="text-amber-400 font-bold animate-pulse">&gt;&gt;</span>
               ) : (
                 <span className="text-[#0078d4] font-bold">user@codelab:~$</span>
               )}
@@ -437,9 +306,18 @@ export default function BottomPanel() {
                 autoFocus
                 value={cliInput}
                 onChange={(e) => setCliInput(e.target.value)}
-                placeholder={waitingForStdin ? "type your input number/text here and press Enter..." : "type command (e.g. run, ls, help)..."}
+                placeholder={waitingForStdin ? "type input number and press Enter (e.g. 10)..." : "type command (e.g. run, ls, help)..."}
                 className={`flex-1 bg-transparent focus:outline-none text-xs font-mono caret-[#0078d4] ${waitingForStdin ? 'text-amber-300 font-bold placeholder:text-amber-500/60' : (isDark ? 'text-white' : 'text-gray-900')}`}
               />
+
+              {waitingForStdin && (
+                <button
+                  type="submit"
+                  className="px-2 py-0.5 bg-[#0078d4] hover:bg-[#006cc1] text-white text-[11px] font-bold rounded transition"
+                >
+                  Enter ↵
+                </button>
+              )}
             </form>
 
             <div ref={terminalBottomRef} />
@@ -529,7 +407,6 @@ export default function BottomPanel() {
         )}
 
       </div>
-
     </div>
   );
 }

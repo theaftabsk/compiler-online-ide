@@ -17,12 +17,9 @@ export async function executeCodeLive(
 ): Promise<ExecutionResult> {
   const startTime = performance.now();
 
-  // 1. Try executing via live Docker backend API on VPS
+  // 1. Try executing via live Docker backend API on VPS or Next.js server
   try {
-    const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-      ? '/api/code/run'
-      : 'http://localhost:5000/api/code/run';
-
+    const apiUrl = '/api/code/run';
     const res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -450,9 +447,18 @@ function splitStatements(body: string): string[] {
     if (char === '{') inBlock++;
     else if (char === '}') inBlock--;
 
-    if (inBlock === 0 && (char === ';' || (char === '}' && current.trim().startsWith('if')))) {
-      stmts.push(current);
-      current = '';
+    if (inBlock === 0) {
+      if (char === ';') {
+        stmts.push(current);
+        current = '';
+      } else if (char === '}') {
+        // Look ahead: don't split if next token is 'else'
+        const rest = body.slice(i + 1).trimStart();
+        if (!rest.startsWith('else')) {
+          stmts.push(current);
+          current = '';
+        }
+      }
     }
   }
   if (current.trim()) stmts.push(current);

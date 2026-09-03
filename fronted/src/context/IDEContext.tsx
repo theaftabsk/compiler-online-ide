@@ -43,13 +43,13 @@ const DEFAULT_DEMO_SESSION: LabSessionData = {
   department: 'Computer Science & AI',
   batchName: 'Section J - Batch 2026',
   teacherName: 'Prof. S. Sengupta',
-  questionTitle: 'Check Positive, Negative, or Zero',
-  questionDescription: 'Write a program in C to take an integer input from stdin and determine if it is Positive, Negative, or Zero.',
+  questionTitle: 'Check Even or Odd',
+  questionDescription: 'Write a program in C to take an integer input from stdin and determine if it is Even or Odd.',
   testCases: [
-    { id: 'tc-1', inputData: '10', expectedOutput: 'Positive', isHidden: false },
-    { id: 'tc-2', inputData: '-5', expectedOutput: 'Negative', isHidden: false },
-    { id: 'tc-3', inputData: '0', expectedOutput: 'Zero', isHidden: false },
-    { id: 'tc-4', inputData: '9999', expectedOutput: 'Positive', isHidden: true },
+    { id: 'tc-1', inputData: '10', expectedOutput: 'Even', isHidden: false },
+    { id: 'tc-2', inputData: '7', expectedOutput: 'Odd', isHidden: false },
+    { id: 'tc-3', inputData: '0', expectedOutput: 'Even', isHidden: false },
+    { id: 'tc-4', inputData: '99', expectedOutput: 'Odd', isHidden: true },
   ],
   timeLimitMinutes: 90,
   totalMachines: 60,
@@ -66,47 +66,35 @@ const INITIAL_FILES: VFSFile[] = [
 int main()
 {
     int num;
-    
+
     printf("Enter a number: ");
     scanf("%d", &num);
-    
-    if (num > 0)
+
+    if (num % 2 == 0)
     {
-        printf("The number is Positive\\n");
-    }
-    else if (num < 0)
-    {
-        printf("The number is Negative\\n");
+        printf("The number is Even\\n");
     }
     else
     {
-        printf("The number is Zero\\n");
+        printf("The number is Odd\\n");
     }
-    
+
     return 0;
 }`,
   },
   {
     name: 'problem.md',
     language: 'markdown',
-    content: `# Practical Problem: Check Positive, Negative, or Zero
+    content: `# Practical Problem: Check Even or Odd
 
-Write a program that takes an integer **N** from standard input and determines whether it is:
-- **Positive** (if N > 0)
-- **Negative** (if N < 0)
-- **Zero** (if N == 0)
+Write a program that takes an integer **N** from standard input and determines whether it is **Even** or **Odd**.
 
 ### Sample Verification:
-- **Input:** \`10\` -> **Output:** \`The number is Positive\`
-- **Input:** \`-5\` -> **Output:** \`The number is Negative\`
-- **Input:** \`0\` -> **Output:** \`The number is Zero\`
+- **Input:** \`10\` -> **Output:** \`The number is Even\`
+- **Input:** \`7\` -> **Output:** \`The number is Odd\`
+- **Input:** \`0\` -> **Output:** \`The number is Even\`
 `,
   },
-  {
-    name: 'input.txt',
-    language: 'text',
-    content: '10',
-  }
 ];
 
 interface IDEContextType {
@@ -118,8 +106,6 @@ interface IDEContextType {
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   activeSidebar: 'explorer' | 'problem' | 'faculty' | 'analytics';
   setActiveSidebar: React.Dispatch<React.SetStateAction<'explorer' | 'problem' | 'faculty' | 'analytics'>>;
-  
-  // Virtual File System (Local, 0% Server Load)
   files: VFSFile[];
   openTabs: string[];
   activeFileTab: string;
@@ -130,19 +116,14 @@ interface IDEContextType {
   closeFileTab: (name: string, e?: React.MouseEvent) => void;
   openFileInEditor: (name: string) => void;
   updateFileContent: (name: string, content: string) => void;
-  
   language: ProgrammingLanguage;
   setLanguage: (lang: ProgrammingLanguage) => void;
   code: string;
   setCode: (code: string) => void;
-  
   panelOpen: boolean;
   setPanelOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  panelTab: 'terminal' | 'testcases' | 'input' | 'anticheat';
-  setPanelTab: React.Dispatch<React.SetStateAction<'terminal' | 'testcases' | 'input' | 'anticheat'>>;
-  customInput: string;
-  setCustomInput: (val: string) => void;
-  
+  panelTab: 'terminal' | 'testcases' | 'anticheat';
+  setPanelTab: React.Dispatch<React.SetStateAction<'terminal' | 'testcases' | 'anticheat'>>;
   // Terminals State
   terminals: TerminalInstance[];
   setTerminals: React.Dispatch<React.SetStateAction<TerminalInstance[]>>;
@@ -150,8 +131,11 @@ interface IDEContextType {
   setActiveTermId: (id: string) => void;
   handleAddNewTerminal: () => void;
   handleKillTerminal: (id: string, e?: React.MouseEvent) => void;
-  appendTerminalLog: (logText: string) => void;
-  
+  // Interactive Live STDIN state
+  waitingForStdin: boolean;
+  setWaitingForStdin: (val: boolean) => void;
+  pendingPromptText: string;
+  setPendingPromptText: (val: string) => void;
   isRunning: boolean;
   testResults: any[];
   student: StudentSessionInfo | null;
@@ -168,7 +152,7 @@ interface IDEContextType {
   inspectedAttendee: MachineAttendee | null;
   setInspectedAttendee: (val: MachineAttendee | null) => void;
   attendees: MachineAttendee[];
-  handleRunCode: () => Promise<void>;
+  handleRunCode: (explicitInput?: string) => Promise<void>;
   handleRunTests: () => Promise<void>;
   handleSubmitPractical: () => void;
   handleTeacherLogin: (id: string, pass: string) => boolean;
@@ -185,24 +169,21 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [viewMode, setViewMode] = useState<AppViewMode>('playground');
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [activeSidebar, setActiveSidebar] = useState<'explorer' | 'problem' | 'faculty' | 'analytics'>('explorer');
-  
-  // VFS state
+
   const [files, setFiles] = useState<VFSFile[]>(INITIAL_FILES);
   const [openTabs, setOpenTabs] = useState<string[]>(['main.c', 'problem.md']);
   const [activeFileTab, setActiveFileTab] = useState<string>('main.c');
   const [language, setLanguageState] = useState<ProgrammingLanguage>('c');
 
   const [panelOpen, setPanelOpen] = useState<boolean>(true);
-  const [panelTab, setPanelTab] = useState<'terminal' | 'testcases' | 'input' | 'anticheat'>('terminal');
-  const [customInput, setCustomInput] = useState<string>('10');
-  
+  const [panelTab, setPanelTab] = useState<'terminal' | 'testcases' | 'anticheat'>('terminal');
+
   // Unified Terminals State
   const [terminals, setTerminals] = useState<TerminalInstance[]>([
     {
       id: 'term-1',
       name: '1: bash',
       logs: [
-        'CodeLab Online IDE [Version 2.0.4]',
         'Host: Cloud Docker Sandbox (GCC 13 / Python 3.11 Ready)',
         'user@codelab:~$ '
       ]
@@ -210,17 +191,19 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   ]);
   const [activeTermId, setActiveTermId] = useState<string>('term-1');
 
+  // Interactive Live STDIN state
+  const [waitingForStdin, setWaitingForStdin] = useState<boolean>(false);
+  const [pendingPromptText, setPendingPromptText] = useState<string>('');
+
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [testResults, setTestResults] = useState<any[]>([]);
 
-  // Session & Auth State
   const [sessionsList, setSessionsList] = useState<LabSessionData[]>([DEFAULT_DEMO_SESSION]);
   const [activeSession, setActiveSession] = useState<LabSessionData | null>(null);
   const [student, setStudent] = useState<StudentSessionInfo | null>(null);
   const [isTeacherLoggedIn, setIsTeacherLoggedIn] = useState<boolean>(false);
   const [teacherEmail, setTeacherEmail] = useState<string>('');
 
-  // Modals
   const [loginModalOpen, setLoginModalOpen] = useState<boolean>(false);
   const [createSessionModalOpen, setCreateSessionModalOpen] = useState<boolean>(false);
   const [joinSessionModalOpen, setJoinSessionModalOpen] = useState<boolean>(false);
@@ -253,23 +236,11 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'vs-light') {
-      root.classList.remove('dark');
-      root.classList.add('light');
+      root.classList.remove('dark'); root.classList.add('light');
     } else {
-      root.classList.remove('light');
-      root.classList.add('dark');
+      root.classList.remove('light'); root.classList.add('dark');
     }
   }, [theme]);
-
-  // Append log to active terminal
-  const appendTerminalLog = (logText: string) => {
-    setTerminals(prev => prev.map(t => {
-      if (t.id === activeTermId) {
-        return { ...t, logs: [...t.logs, logText] };
-      }
-      return t;
-    }));
-  };
 
   const handleAddNewTerminal = () => {
     const newId = `term-${Date.now()}`;
@@ -307,20 +278,16 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const createNewFile = (name: string) => {
     const cleanName = name.trim();
     if (!cleanName || files.some(f => f.name === cleanName)) return;
-
     let lang = 'c';
     if (cleanName.endsWith('.cpp')) lang = 'cpp';
     else if (cleanName.endsWith('.java')) lang = 'java';
     else if (cleanName.endsWith('.py')) lang = 'python';
     else if (cleanName.endsWith('.md')) lang = 'markdown';
     else if (cleanName.endsWith('.txt')) lang = 'text';
-
     const newFile: VFSFile = {
-      name: cleanName,
-      language: lang,
-      content: cleanName.endsWith('.c') ? '// New C source file\n#include <stdio.h>\n\nint main() {\n    printf("Hello from ' + cleanName + '\\n");\n    return 0;\n}\n' : ''
+      name: cleanName, language: lang,
+      content: cleanName.endsWith('.c') ? '#include <stdio.h>\n\nint main() {\n    printf("Hello!\\n");\n    return 0;\n}\n' : ''
     };
-
     setFiles(prev => [...prev, newFile]);
     setOpenTabs(prev => [...prev.filter(t => t !== cleanName), cleanName]);
     setActiveFileTab(cleanName);
@@ -329,13 +296,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const createNewFolder = (name: string) => {
     const cleanName = name.trim();
     if (!cleanName || files.some(f => f.name === cleanName)) return;
-    const newFolder: VFSFile = {
-      name: cleanName,
-      language: 'folder',
-      content: '',
-      isFolder: true
-    };
-    setFiles(prev => [...prev, newFolder]);
+    setFiles(prev => [...prev, { name: cleanName, language: 'folder', content: '', isFolder: true }]);
   };
 
   const deleteFile = (name: string) => {
@@ -344,16 +305,12 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setOpenTabs(prev => prev.filter(t => t !== name));
     if (activeFileTab === name) {
       const remaining = files.filter(f => f.name !== name && !f.isFolder);
-      if (remaining.length > 0) {
-        setActiveFileTab(remaining[0].name);
-      }
+      if (remaining.length > 0) setActiveFileTab(remaining[0].name);
     }
   };
 
   const openFileInEditor = (name: string) => {
-    if (!openTabs.includes(name)) {
-      setOpenTabs(prev => [...prev, name]);
-    }
+    if (!openTabs.includes(name)) setOpenTabs(prev => [...prev, name]);
     setActiveFileTab(name);
   };
 
@@ -361,61 +318,148 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     e?.stopPropagation();
     const updated = openTabs.filter(t => t !== name);
     setOpenTabs(updated);
-    if (activeFileTab === name) {
-      if (updated.length > 0) {
-        setActiveFileTab(updated[updated.length - 1]);
-      }
-    }
+    if (activeFileTab === name && updated.length > 0) setActiveFileTab(updated[updated.length - 1]);
   };
 
   const updateFileContent = (name: string, content: string) => {
     setFiles(prev => prev.map(f => f.name === name ? { ...f, content } : f));
   };
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'vs-dark' ? 'vs-light' : 'vs-dark');
-  };
+  const toggleTheme = () => setTheme(prev => prev === 'vs-dark' ? 'vs-light' : 'vs-dark');
 
   const setLanguage = (newLang: ProgrammingLanguage) => {
     setLanguageState(newLang);
     const fileExt = newLang === 'c' ? 'main.c' : (newLang === 'cpp' ? 'main.cpp' : (newLang === 'java' ? 'Main.java' : 'script.py'));
-    if (!files.some(f => f.name === fileExt)) {
-      createNewFile(fileExt);
-    } else {
-      openFileInEditor(fileExt);
-    }
+    if (!files.some(f => f.name === fileExt)) createNewFile(fileExt);
+    else openFileInEditor(fileExt);
   };
 
-  // FULLY INTEGRATED RUN CODE HANDLER (Works 100% on Run Button & Terminal)
+  // Helper to check if code needs stdin (scanf, cin, input, Scanner)
+  const codeNeedsStdin = (src: string): boolean => {
+    return src.includes('scanf(') || src.includes('cin >>') || src.includes('cin>>') || src.includes('input(') || src.includes('Scanner') || src.includes('readLine');
+  };
+
+  // Extract prompt text before input (e.g. "Enter a number: ")
+  const extractPrompt = (src: string): string => {
+    const m = src.match(/printf\s*\(\s*["']([^"']+)["']\s*\)/);
+    if (m) {
+      return m[1].replace(/\\n/g, '').trim() + ' ';
+    }
+    const pyMatch = src.match(/input\s*\(\s*["']([^"']+)["']\s*\)/);
+    if (pyMatch) {
+      return pyMatch[1].trim() + ' ';
+    }
+    return 'Enter input: ';
+  };
+
+  // ============================================================
+  // UNIFIED LIVE RUN HANDLER (Used by ▶ Run button & CLI)
+  // If code has scanf -> pauses in terminal and asks for input
+  // Otherwise -> compiles and runs immediately in sandbox
+  // ============================================================
   const handleRunCode = async (explicitInput?: string) => {
-    setIsRunning(true);
     setPanelOpen(true);
     setPanelTab('terminal');
 
-    const inputToUse = explicitInput !== undefined ? explicitInput : customInput;
-    const cmdStr = `user@codelab:~$ gcc -O2 ${activeFileTab} -o main && ./main`;
+    const cmdStr = language === 'c'
+      ? `user@codelab:~$ gcc -O2 ${activeFileTab} -o main && ./main`
+      : (language === 'cpp'
+        ? `user@codelab:~$ g++ -O2 ${activeFileTab} -o main && ./main`
+        : `user@codelab:~$ python3 ${activeFileTab}`);
 
+    // If explicitInput is provided (e.g. from terminal submit or run 10)
+    if (explicitInput !== undefined) {
+      setIsRunning(true);
+      try {
+        const result = await executeCodeLive(language, code, explicitInput);
+        let out = (result.output || '').trim();
+        const prompt = pendingPromptText.trim();
+        if (prompt && out.startsWith(prompt)) {
+          out = out.slice(prompt.length).trim();
+        }
+
+        setTerminals(prev => prev.map(t => {
+          if (t.id === activeTermId) {
+            return {
+              ...t,
+              logs: [
+                ...t.logs,
+                out || (result.error ? `Error: ${result.error}` : ''),
+                `[Execution Succeeded: ${result.durationMs}ms with exit code ${result.exitCode}]`,
+                'user@codelab:~$ '
+              ]
+            };
+          }
+          return t;
+        }));
+      } catch (err: any) {
+        setTerminals(prev => prev.map(t => {
+          if (t.id === activeTermId) {
+            return {
+              ...t,
+              logs: [...t.logs, `Runtime Error: ${err.message}`, 'user@codelab:~$ ']
+            };
+          }
+          return t;
+        }));
+      } finally {
+        setIsRunning(false);
+        setWaitingForStdin(false);
+        setPendingPromptText('');
+      }
+      return;
+    }
+
+    // Check if code requires STDIN (scanf/input/cin)
+    if (codeNeedsStdin(code)) {
+      const prompt = extractPrompt(code);
+      setPendingPromptText(prompt);
+      setWaitingForStdin(true);
+
+      setTerminals(prev => prev.map(t => {
+        if (t.id === activeTermId) {
+          return {
+            ...t,
+            logs: [
+              ...t.logs,
+              cmdStr,
+              '[Compiling in Docker sandbox...]',
+              prompt
+            ]
+          };
+        }
+        return t;
+      }));
+      return;
+    }
+
+    // Code has no scanf/cin -> run directly
+    setIsRunning(true);
     setTerminals(prev => prev.map(t => {
       if (t.id === activeTermId) {
         return {
           ...t,
-          logs: [...t.logs, cmdStr, '[Compiling and executing in Docker sandbox...]']
+          logs: [
+            ...t.logs,
+            cmdStr,
+            '[Compiling and executing in Docker sandbox...]'
+          ]
         };
       }
       return t;
     }));
 
     try {
-      const result = await executeCodeLive(language, code, inputToUse);
+      const result = await executeCodeLive(language, code, '');
+      const finalOut = result.output || (result.error ? `Error: ${result.error}` : '(Process completed)');
 
       setTerminals(prev => prev.map(t => {
         if (t.id === activeTermId) {
-          const finalOutput = result.output || (result.error ? `Error: ${result.error}` : '(Execution completed)');
           return {
             ...t,
             logs: [
               ...t.logs,
-              finalOutput,
+              finalOut,
               `[Execution Succeeded: ${result.durationMs}ms with exit code ${result.exitCode}]`,
               'user@codelab:~$ '
             ]
@@ -444,37 +488,29 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setPanelTab('testcases');
 
     const cases = activeSession?.testCases || [
-      { id: 'tc-1', inputData: '10', expectedOutput: 'Positive', isHidden: false },
-      { id: 'tc-2', inputData: '-5', expectedOutput: 'Negative', isHidden: false },
-      { id: 'tc-3', inputData: '0', expectedOutput: 'Zero', isHidden: false },
-      { id: 'tc-4', inputData: '9999', expectedOutput: 'Positive', isHidden: true },
+      { id: 'tc-1', inputData: '10', expectedOutput: 'Even', isHidden: false },
+      { id: 'tc-2', inputData: '7', expectedOutput: 'Odd', isHidden: false },
+      { id: 'tc-3', inputData: '0', expectedOutput: 'Even', isHidden: false },
+      { id: 'tc-4', inputData: '99', expectedOutput: 'Odd', isHidden: true },
     ];
 
     try {
       const evaluated = [];
-
       for (let i = 0; i < cases.length; i++) {
         const tc = cases[i];
         const res = await executeCodeLive(language, code, tc.inputData);
         const actualTrimmed = (res.output || '').trim();
         const expectedTrimmed = tc.expectedOutput.trim();
-        
-        // Smart matching: check if output contains the expected answer (e.g. "The number is Positive" contains "Positive")
-        const passed = 
+        const passed =
           actualTrimmed.toLowerCase().includes(expectedTrimmed.toLowerCase()) ||
           expectedTrimmed.toLowerCase().includes(actualTrimmed.toLowerCase());
-
         evaluated.push({
-          caseNumber: i + 1,
-          passed,
-          input: tc.inputData,
-          expected: tc.expectedOutput,
+          caseNumber: i + 1, passed,
+          input: tc.inputData, expected: tc.expectedOutput,
           actual: actualTrimmed || '(No Output)',
-          timeMs: res.durationMs,
-          isHidden: tc.isHidden
+          timeMs: res.durationMs, isHidden: tc.isHidden
         });
       }
-
       setTestResults(evaluated);
     } catch (_) {
     } finally {
@@ -484,71 +520,43 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
   const handleSubmitPractical = () => {
     handleRunTests();
-    if (student) {
-      setStudent(prev => prev ? { ...prev, submitted: true, score: 100 } : null);
-    }
+    if (student) setStudent(prev => prev ? { ...prev, submitted: true, score: 100 } : null);
   };
 
   const handleTeacherLogin = (id: string, pass: string): boolean => {
     if (id.trim() && pass.trim()) {
-      setIsTeacherLoggedIn(true);
-      setTeacherEmail(id);
-      setViewMode('teacher_dashboard');
-      return true;
+      setIsTeacherLoggedIn(true); setTeacherEmail(id); setViewMode('teacher_dashboard'); return true;
     }
     return false;
   };
 
   const handleTeacherLogout = () => {
-    setIsTeacherLoggedIn(false);
-    setTeacherEmail('');
-    setViewMode('playground');
+    setIsTeacherLoggedIn(false); setTeacherEmail(''); setViewMode('playground');
   };
 
   const handleCreateSession = (data: Omit<LabSessionData, 'sessionCode' | 'sessionPassword' | 'createdAt' | 'isActive'>): LabSessionData => {
     const randomCode = `LAB-${Math.floor(1000 + Math.random() * 9000)}`;
     const randomPass = `${Math.floor(1000 + Math.random() * 9000)}`;
-
     const newSession: LabSessionData = {
-      ...data,
-      sessionCode: randomCode,
-      sessionPassword: randomPass,
-      createdAt: new Date().toISOString(),
-      isActive: true,
+      ...data, sessionCode: randomCode, sessionPassword: randomPass,
+      createdAt: new Date().toISOString(), isActive: true,
     };
-
     setSessionsList(prev => [newSession, ...prev]);
     setActiveSession(newSession);
     return newSession;
   };
 
-  const handleStudentJoinSession = (
-    codeStr: string,
-    pass: string,
-    name: string,
-    roll: string,
-    machine: string
-  ): { success: boolean; message: string } => {
+  const handleStudentJoinSession = (codeStr: string, pass: string, name: string, roll: string, machine: string): { success: boolean; message: string } => {
     const targetSession = sessionsList.find(
       s => s.sessionCode.toUpperCase() === codeStr.trim().toUpperCase() && s.sessionPassword === pass.trim()
     );
-
-    if (!targetSession) {
-      return { success: false, message: 'Invalid Session Code or Password. Please verify with your teacher.' };
-    }
-
+    if (!targetSession) return { success: false, message: 'Invalid Session Code or Password.' };
     const studentInfo: StudentSessionInfo = {
-      name: name.trim() || 'Student',
-      rollNumber: roll.trim() || '001',
-      section: targetSession.batchName,
-      machineNumber: machine.trim() || 'PC-01',
-      sessionCode: targetSession.sessionCode,
-      language: 'c',
-      submitted: false,
-      score: 0,
-      tabSwitches: 0,
+      name: name.trim() || 'Student', rollNumber: roll.trim() || '001',
+      section: targetSession.batchName, machineNumber: machine.trim() || 'PC-01',
+      sessionCode: targetSession.sessionCode, language: 'c',
+      submitted: false, score: 0, tabSwitches: 0,
     };
-
     setActiveSession(targetSession);
     setStudent(studentInfo);
     setViewMode('student_lab');
@@ -557,75 +565,32 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleLeaveLabSession = () => {
-    setStudent(null);
-    setActiveSession(null);
-    setViewMode('playground');
+    setStudent(null); setActiveSession(null); setViewMode('playground');
   };
 
   return (
-    <IDEContext.Provider
-      value={{
-        theme,
-        toggleTheme,
-        viewMode,
-        setViewMode,
-        sidebarOpen,
-        setSidebarOpen,
-        activeSidebar,
-        setActiveSidebar,
-        files,
-        openTabs,
-        activeFileTab,
-        setActiveFileTab,
-        createNewFile,
-        createNewFolder,
-        deleteFile,
-        closeFileTab,
-        openFileInEditor,
-        updateFileContent,
-        language,
-        setLanguage,
-        code,
-        setCode,
-        panelOpen,
-        setPanelOpen,
-        panelTab,
-        setPanelTab,
-        customInput,
-        setCustomInput,
-        terminals,
-        setTerminals,
-        activeTermId,
-        setActiveTermId,
-        handleAddNewTerminal,
-        handleKillTerminal,
-        appendTerminalLog,
-        isRunning,
-        testResults,
-        student,
-        activeSession,
-        sessionsList,
-        isTeacherLoggedIn,
-        teacherEmail,
-        loginModalOpen,
-        setLoginModalOpen,
-        createSessionModalOpen,
-        setCreateSessionModalOpen,
-        joinSessionModalOpen,
-        setJoinSessionModalOpen,
-        inspectedAttendee,
-        setInspectedAttendee,
-        attendees,
-        handleRunCode,
-        handleRunTests,
-        handleSubmitPractical,
-        handleTeacherLogin,
-        handleTeacherLogout,
-        handleCreateSession,
-        handleStudentJoinSession,
-        handleLeaveLabSession,
-      }}
-    >
+    <IDEContext.Provider value={{
+      theme, toggleTheme, viewMode, setViewMode,
+      sidebarOpen, setSidebarOpen, activeSidebar, setActiveSidebar,
+      files, openTabs, activeFileTab, setActiveFileTab,
+      createNewFile, createNewFolder, deleteFile, closeFileTab, openFileInEditor, updateFileContent,
+      language, setLanguage, code, setCode,
+      panelOpen, setPanelOpen, panelTab, setPanelTab,
+      terminals, setTerminals, activeTermId, setActiveTermId,
+      handleAddNewTerminal, handleKillTerminal,
+      waitingForStdin, setWaitingForStdin,
+      pendingPromptText, setPendingPromptText,
+      isRunning, testResults,
+      student, activeSession, sessionsList,
+      isTeacherLoggedIn, teacherEmail,
+      loginModalOpen, setLoginModalOpen,
+      createSessionModalOpen, setCreateSessionModalOpen,
+      joinSessionModalOpen, setJoinSessionModalOpen,
+      inspectedAttendee, setInspectedAttendee, attendees,
+      handleRunCode, handleRunTests, handleSubmitPractical,
+      handleTeacherLogin, handleTeacherLogout,
+      handleCreateSession, handleStudentJoinSession, handleLeaveLabSession,
+    }}>
       {children}
     </IDEContext.Provider>
   );

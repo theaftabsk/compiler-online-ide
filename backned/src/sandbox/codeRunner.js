@@ -202,9 +202,11 @@ function runShellCommand(cmd, cwd, timeoutMs, stdinData = '') {
       });
     });
 
-    if (stdinData && child.stdin) {
-      child.stdin.write(stdinData);
-      child.stdin.end();
+    if (child.stdin) {
+      if (stdinData != null && stdinData !== '') {
+        child.stdin.write(String(stdinData).endsWith('\n') ? String(stdinData) : String(stdinData) + '\n');
+      }
+      try { child.stdin.end(); } catch (_) {}
     }
 
     const timer = setTimeout(() => {
@@ -219,56 +221,18 @@ function runShellCommand(cmd, cwd, timeoutMs, stdinData = '') {
 }
 
 /**
- * Smart JavaScript simulation fallback in case local system doesn't have gcc/g++ installed
+ * Return real compiler / system error if compilation or execution fails
  */
 function fallbackSimulation(language, code, input, testCases, error) {
-  // If basic syntax issues or fallback mode
-  if (testCases && testCases.length > 0) {
-    const results = testCases.map((tc, idx) => {
-      // Basic simulation check for classic problems (like positive/negative/zero)
-      let simulatedOutput = '';
-      const num = parseInt(tc.inputData);
-      if (!isNaN(num)) {
-        if (num > 0) simulatedOutput = 'Positive';
-        else if (num < 0) simulatedOutput = 'Negative';
-        else simulatedOutput = 'Zero';
-      } else {
-        simulatedOutput = tc.expectedOutput;
-      }
-
-      const passed = simulatedOutput.trim().toLowerCase() === (tc.expectedOutput || '').trim().toLowerCase();
-      return {
-        caseNumber: idx + 1,
-        passed,
-        verdict: passed ? 'ACCEPTED' : 'WRONG_ANSWER',
-        input: tc.inputData,
-        expected: tc.expectedOutput,
-        actual: simulatedOutput,
-        executionTimeMs: 14,
-        isHidden: !!tc.isHidden
-      };
-    });
-
-    const passedCount = results.filter(r => r.passed).length;
-    return {
-      success: true,
-      verdict: passedCount === testCases.length ? 'ACCEPTED' : 'WRONG_ANSWER',
-      passedCount,
-      totalCount: testCases.length,
-      score: Math.round((passedCount / testCases.length) * 100),
-      testResults: results,
-      output: `[Engine Mode: Fallback Sandbox Evaluator]\nCompiler status: Ready\n` +
-        results.map(r => `Test Case #${r.caseNumber}: ${r.verdict}`).join('\n')
-    };
-  }
-
   return {
-    success: true,
-    verdict: 'SUCCESS',
-    output: `[Execution Output for ${language.toUpperCase()}]\nProgram completed successfully with exit code 0.\nInput received: ${input || 'None'}`,
-    error: '',
-    durationMs: 18
+    success: false,
+    verdict: 'EXECUTION_ERROR',
+    error: error.message || 'Compilation or execution failed on server',
+    output: '',
+    testResults: []
   };
 }
 
-module.exports = { executeCode };
+module.exports = {
+  executeCode
+};
