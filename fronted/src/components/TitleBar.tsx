@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Code2, Sun, Moon, Key, ShieldCheck } from 'lucide-react';
+import { Code2, Sun, Moon, Key, ShieldCheck, Maximize, Minimize } from 'lucide-react';
 import { useIDE } from '@/context/IDEContext';
 
 export default function TitleBar() {
@@ -15,7 +15,24 @@ export default function TitleBar() {
     handleLeaveLabSession
   } = useIDE();
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const isDark = theme === 'vs-dark';
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const togglePageFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
 
   return (
     <header className={`h-9 flex items-center justify-between px-3 text-xs border-b shrink-0 ${isDark ? 'bg-[#181818] border-[#2b2b2b] text-[#cccccc]' : 'bg-[#f8f8f8] border-[#e7e7e7] text-[#3b3b3b]'}`}>
@@ -37,7 +54,7 @@ export default function TitleBar() {
         )}
       </div>
 
-      {/* Right Controls: Prominent Action Buttons & Theme Switcher */}
+      {/* Right Controls: Prominent Action Buttons, Fullscreen & Theme Switcher */}
       <div className="flex items-center gap-2">
         
         {/* If in Student Lab Mode */}
@@ -68,13 +85,22 @@ export default function TitleBar() {
           </>
         )}
 
+        {/* Page Fullscreen Toggle Button */}
+        <button
+          onClick={togglePageFullscreen}
+          title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen (Full Page IDE)'}
+          className={`p-1.5 rounded transition ${isDark ? 'hover:bg-[#2a2d2e] text-gray-300 hover:text-white' : 'hover:bg-[#e0e0e0] text-gray-700'}`}
+        >
+          {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+        </button>
+
         {/* Theme Switcher */}
         <button
           onClick={toggleTheme}
           title={isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
           className={`p-1.5 rounded transition ${isDark ? 'hover:bg-[#2a2d2e] text-amber-400' : 'hover:bg-[#e0e0e0] text-[#0078d4]'}`}
         >
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
         </button>
       </div>
     </header>
