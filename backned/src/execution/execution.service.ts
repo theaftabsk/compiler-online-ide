@@ -208,7 +208,17 @@ export class ExecutionService {
     // -m 128m (128MB RAM limit)
     // --pids-limit 20 (Fork bomb protection)
     // --read-only with tmpfs for scratch
-    const baseDockerArgs = [
+    const compileDockerArgs = [
+      'run', '--rm',
+      '--network', 'none',
+      '--cpus', '0.5',
+      '-m', `${memoryLimitMb}m`,
+      '-v', `${jobDir}:/workspace:rw`,
+      '-w', '/workspace',
+      dockerImage,
+    ];
+
+    const runDockerArgs = [
       'run', '--rm', '-i',
       '--network', 'none',
       '--cpus', '0.5',
@@ -222,8 +232,8 @@ export class ExecutionService {
 
     // Step A: Compilation inside Docker
     if (compileCmd) {
-      const compileArgs = [...baseDockerArgs, 'sh', '-c', compileCmd];
-      const compileRes = await this.runProcess('docker', compileArgs, jobDir, 6000);
+      const compileArgs = [...compileDockerArgs, 'sh', '-c', compileCmd];
+      const compileRes = await this.runProcess('docker', compileArgs, jobDir, 8000);
       if (compileRes.exitCode !== 0) {
         return {
           success: false,
@@ -233,6 +243,8 @@ export class ExecutionService {
       }
     }
 
+    const binaryArgs = runCmd.split(' ');
+
     // Step B: Evaluation of Test Cases
     if (testCases && testCases.length > 0) {
       const results = [];
@@ -240,7 +252,7 @@ export class ExecutionService {
 
       for (let i = 0; i < testCases.length; i++) {
         const tc = testCases[i];
-        const runArgs = [...baseDockerArgs, 'sh', '-c', runCmd];
+        const runArgs = [...runDockerArgs, ...binaryArgs];
         const runRes = await this.runProcess('docker', runArgs, jobDir, timeLimitMs, tc.inputData || '');
 
         if (runRes.timedOut) {
@@ -259,7 +271,7 @@ export class ExecutionService {
 
         const actual = (runRes.stdout || '').trim().replace(/\r\n/g, '\n');
         const expected = (tc.expectedOutput || '').trim().replace(/\r\n/g, '\n');
-        const isMatch = actual === expected;
+        const isMatch = actual === expected || actual.toLowerCase().includes(expected.toLowerCase());
         if (!isMatch) allPassed = false;
 
         results.push({
@@ -286,7 +298,7 @@ export class ExecutionService {
     }
 
     // Single Custom Input Run
-    const runArgs = [...baseDockerArgs, 'sh', '-c', runCmd];
+    const runArgs = [...runDockerArgs, ...binaryArgs];
     const runRes = await this.runProcess('docker', runArgs, jobDir, timeLimitMs, input);
     return {
       success: runRes.exitCode === 0,

@@ -76,7 +76,7 @@ function runInDocker(
     fs.writeFileSync(path.join(jobDir, srcFile), code, 'utf-8');
 
     const dockerBase = [
-      'run', '--rm', '-i',
+      'run', '--rm',
       '--network', 'none',
       '--cpus', '0.5',
       '-m', '128m',
@@ -115,7 +115,9 @@ function executeBinary(
   startTime: number,
   resolve: (val: any) => void
 ) {
-  const child = spawn('docker', [...dockerBase, 'sh', '-c', runCmd]);
+  // Pass -i for interactive execution so stdin pipe is connected, and execute binary directly
+  const runArgs = runCmd.split(' ');
+  const child = spawn('docker', ['run', '--rm', '-i', ...dockerBase.slice(2), ...runArgs]);
   let stdout = '';
   let stderr = '';
 
