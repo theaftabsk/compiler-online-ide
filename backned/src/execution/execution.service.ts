@@ -451,10 +451,8 @@ export class ExecutionService {
       child.stdout?.on('data', (d) => { stdout += d.toString(); });
       child.stderr?.on('data', (d) => { stderr += d.toString(); });
 
-      if (child.stdin) {
-        if (stdinData != null && stdinData !== '') {
-          child.stdin.write(String(stdinData).endsWith('\n') ? String(stdinData) : String(stdinData) + '\n');
-        }
+      if (child.stdin && stdinData != null && stdinData !== '') {
+        child.stdin.write(String(stdinData).endsWith('\n') ? String(stdinData) : String(stdinData) + '\n');
         try { child.stdin.end(); } catch (_) {}
       }
 
