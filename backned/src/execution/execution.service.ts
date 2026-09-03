@@ -111,7 +111,7 @@ export class ExecutionService {
       switch (language.toLowerCase()) {
         case 'c':
           sourceFileName = 'main.c';
-          dockerImage = 'gcc:13-alpine';
+          dockerImage = 'gcc:latest';
           fs.writeFileSync(path.join(jobDir, sourceFileName), code, 'utf-8');
           compileInsideDocker = 'gcc main.c -O2 -o main.out';
           runInsideDocker = './main.out';
@@ -120,7 +120,7 @@ export class ExecutionService {
         case 'cpp':
         case 'c++':
           sourceFileName = 'main.cpp';
-          dockerImage = 'gcc:13-alpine';
+          dockerImage = 'gcc:latest';
           fs.writeFileSync(path.join(jobDir, sourceFileName), code, 'utf-8');
           compileInsideDocker = 'g++ main.cpp -O2 -o main.out';
           runInsideDocker = './main.out';
