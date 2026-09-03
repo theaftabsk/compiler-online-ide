@@ -34,10 +34,29 @@ function IDELayout() {
 
   // Otherwise viewing Public Playground or Student Lab Session
   return (
-    <div className={`h-screen w-screen flex flex-col select-none overflow-hidden ${isDark ? 'bg-[#1e1e1e] text-[#cccccc]' : 'bg-[#ffffff] text-[#24292e]'}`}>
+    <main id="main-ide-workspace" role="main" className={`h-screen w-screen flex flex-col select-none overflow-hidden ${isDark ? 'bg-[#1e1e1e] text-[#cccccc]' : 'bg-[#ffffff] text-[#24292e]'}`}>
       
+      {/* Hidden SEO Heading & Description for Search Crawlers */}
+      <div className="sr-only">
+        <h1>CodeLab Online IDE - Fast Online C, C++, Java & Python Compiler</h1>
+        <p>
+          Write, compile, and run C code online using real GCC 13.3 with interactive terminal input for scanf, cin, and Python input.
+          Features cloud sandbox isolation, automated test case evaluation, and centralized digital laboratory monitoring for educational institutions.
+        </p>
+        <h2>Key Features</h2>
+        <ul>
+          <li>Interactive STDIN Terminal for scanf & cin</li>
+          <li>Sub-50ms Ultra-Fast Compilation & Execution</li>
+          <li>Full support for C (GCC 13), C++ (G++ 13), Java 21, and Python 3.12</li>
+          <li>Machine-wise live monitoring for teachers and instructors</li>
+          <li>Automated hidden test case evaluation and scoring</li>
+        </ul>
+      </div>
+
       {/* 1. Top Titlebar */}
-      <TitleBar />
+      <header role="banner">
+        <TitleBar />
+      </header>
 
       {/* 2. Workspace Area */}
       <div className="flex-1 flex overflow-hidden">
@@ -60,7 +79,7 @@ function IDELayout() {
         onClose={() => setInspectedAttendee(null)}
       />
 
-    </div>
+    </main>
   );
 }
 
