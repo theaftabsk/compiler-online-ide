@@ -1,5 +1,5 @@
 async function test() {
-  const res = await fetch('http://app.restuvexo.shop/api/code/run', {
+  const res = await fetch('https://app.restuvexo.shop/api/code/run', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

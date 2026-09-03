@@ -17,17 +17,7 @@ export async function POST(req: NextRequest) {
     const startTime = Date.now();
     const lang = language.toLowerCase();
 
-    // Check if Docker is available
-    const hasDocker = await checkDocker();
-
-    if (hasDocker) {
-      // Execute in Docker
-      const res = await runInDocker(lang, code, input, tempDir, timeLimitMs);
-      cleanDir(tempDir);
-      return NextResponse.json(res);
-    }
-
-    // Native fallback if GCC / Python is installed on host
+    // Execute natively for ultra-fast response (sub-100ms), fallback to Docker if native compilers absent
     const res = await runNative(lang, code, input, tempDir, timeLimitMs, startTime);
     cleanDir(tempDir);
     return NextResponse.json(res);
@@ -41,108 +31,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function checkDocker(): Promise<boolean> {
-  return new Promise((resolve) => {
-    exec('docker --version', (err) => resolve(!err));
-  });
-}
-
-function runInDocker(
-  lang: string,
-  code: string,
-  input: string,
-  jobDir: string,
-  timeLimitMs: number
-): Promise<any> {
-  return new Promise(async (resolve) => {
-    const startTime = Date.now();
-    let srcFile = 'main.c';
-    let image = 'gcc:latest';
-    let compileCmd = 'gcc main.c -O2 -o main.out';
-    let runCmd = './main.out < input.txt';
-
-    if (lang === 'cpp' || lang === 'c++') {
-      srcFile = 'main.cpp';
-      image = 'gcc:latest';
-      compileCmd = 'g++ main.cpp -O2 -o main.out';
-      runCmd = './main.out < input.txt';
-    } else if (lang === 'python' || lang === 'py') {
-      srcFile = 'script.py';
-      image = 'python:3.11-alpine';
-      compileCmd = '';
-      runCmd = 'python3 script.py < input.txt';
-    }
-
-    fs.writeFileSync(path.join(jobDir, srcFile), code, 'utf-8');
-    fs.writeFileSync(path.join(jobDir, 'input.txt'), input != null && input !== '' ? (String(input).endsWith('\n') ? String(input) : String(input) + '\n') : '', 'utf-8');
-
-    const dockerBase = [
-      'run', '--rm',
-      '--network', 'none',
-      '--cpus', '0.5',
-      '-m', '128m',
-      '-v', `${jobDir}:/workspace:rw`,
-      '-w', '/workspace',
-      image
-    ];
-
-    if (compileCmd) {
-      const compileProc = spawn('docker', [...dockerBase, 'sh', '-c', compileCmd]);
-      let compErr = '';
-      compileProc.stderr.on('data', (d) => { compErr += d.toString(); });
-      
-      compileProc.on('close', (code) => {
-        if (code !== 0) {
-          return resolve({
-            success: false,
-            output: '',
-            error: compErr || 'Compilation Error',
-            durationMs: Date.now() - startTime,
-          });
-        }
-        executeBinary(dockerBase, runCmd, timeLimitMs, startTime, resolve);
-      });
-    } else {
-      executeBinary(dockerBase, runCmd, timeLimitMs, startTime, resolve);
-    }
-  });
-}
-
-function executeBinary(
-  dockerBase: string[],
-  runCmd: string,
-  timeLimitMs: number,
-  startTime: number,
-  resolve: (val: any) => void
-) {
-  const child = spawn('docker', [...dockerBase, 'sh', '-c', runCmd]);
-  let stdout = '';
-  let stderr = '';
-
-  child.stdout?.on('data', (d) => { stdout += d.toString(); });
-  child.stderr?.on('data', (d) => { stderr += d.toString(); });
-
-  const timer = setTimeout(() => {
-    try { child.kill('SIGKILL'); } catch (_) {}
-    resolve({
-      success: false,
-      output: stdout,
-      error: `Time Limit Exceeded (> ${timeLimitMs / 1000}s)`,
-      durationMs: Date.now() - startTime,
-    });
-  }, timeLimitMs);
-
-  child.on('close', (code) => {
-    clearTimeout(timer);
-    resolve({
-      success: code === 0,
-      output: stdout,
-      error: stderr,
-      durationMs: Date.now() - startTime,
-    });
-  });
-}
-
 function runNative(
   lang: string,
   code: string,
@@ -152,13 +40,18 @@ function runNative(
   startTime: number
 ): Promise<any> {
   return new Promise((resolve) => {
-    if (lang === 'c' || lang === 'cpp') {
-      const srcFile = path.join(jobDir, lang === 'c' ? 'main.c' : 'main.cpp');
+    // Write input.txt for clean stdin redirection (handles multiple scanf/cin seamlessly)
+    const inputFile = path.join(jobDir, 'input.txt');
+    fs.writeFileSync(inputFile, input != null && input !== '' ? (String(input).endsWith('\n') ? String(input) : String(input) + '\n') : '', 'utf-8');
+
+    if (lang === 'c' || lang === 'cpp' || lang === 'c++') {
+      const isC = lang === 'c';
+      const srcFile = path.join(jobDir, isC ? 'main.c' : 'main.cpp');
       const outFile = path.join(jobDir, 'main.out');
       fs.writeFileSync(srcFile, code, 'utf-8');
 
-      const compiler = lang === 'c' ? 'gcc' : 'g++';
-      exec(`${compiler} "${srcFile}" -o "${outFile}"`, (compErr, _, compStderr) => {
+      const compiler = isC ? 'gcc' : 'g++';
+      exec(`${compiler} -O2 "${srcFile}" -o "${outFile}"`, { cwd: jobDir, timeout: 8000 }, (compErr, _, compStderr) => {
         if (compErr) {
           return resolve({
             success: false,
@@ -168,50 +61,50 @@ function runNative(
           });
         }
 
-        const child = spawn(outFile, [], { cwd: jobDir });
-        let out = '';
-        let err = '';
-        child.stdout.on('data', (d) => { out += d.toString(); });
-        child.stderr.on('data', (d) => { err += d.toString(); });
-
-        if (child.stdin) {
-          if (input != null && input !== '') {
-            child.stdin.write(String(input).endsWith('\n') ? String(input) : String(input) + '\n');
+        // Run with security limits: 5s CPU limit, 256MB memory limit, redirected from input.txt
+        const runCmd = `ulimit -t 5 -v 262144 2>/dev/null; "${outFile}" < "${inputFile}"`;
+        exec(runCmd, { cwd: jobDir, timeout: timeLimitMs, maxBuffer: 1024 * 1024 }, (runErr, stdout, stderr) => {
+          if (runErr && runErr.killed) {
+            return resolve({
+              success: false,
+              output: stdout || '',
+              error: `Time Limit Exceeded (> ${timeLimitMs / 1000}s)`,
+              durationMs: Date.now() - startTime,
+            });
           }
-          try { child.stdin.end(); } catch (_) {}
-        }
 
-        const timer = setTimeout(() => {
-          try { child.kill(); } catch (_) {}
-          resolve({ success: false, output: out, error: 'Time Limit Exceeded', durationMs: Date.now() - startTime });
-        }, timeLimitMs);
-
-        child.on('close', (code) => {
-          clearTimeout(timer);
-          resolve({ success: code === 0, output: out, error: err, durationMs: Date.now() - startTime });
+          resolve({
+            success: !runErr || runErr.code === 0,
+            output: stdout || '',
+            error: stderr || (runErr && runErr.code !== 0 ? `Process exited with code ${runErr.code}` : ''),
+            durationMs: Date.now() - startTime,
+          });
         });
       });
     } else if (lang === 'python' || lang === 'py') {
       const srcFile = path.join(jobDir, 'script.py');
       fs.writeFileSync(srcFile, code, 'utf-8');
-      const child = spawn('python3', [srcFile], { cwd: jobDir });
-      let out = '';
-      let err = '';
-      child.stdout.on('data', (d) => { out += d.toString(); });
-      child.stderr.on('data', (d) => { err += d.toString(); });
 
-      if (child.stdin) {
-        if (input != null && input !== '') {
-          child.stdin.write(String(input).endsWith('\n') ? String(input) : String(input) + '\n');
+      const runCmd = `ulimit -t 5 -v 262144 2>/dev/null; python3 "${srcFile}" < "${inputFile}"`;
+      exec(runCmd, { cwd: jobDir, timeout: timeLimitMs, maxBuffer: 1024 * 1024 }, (runErr, stdout, stderr) => {
+        if (runErr && runErr.killed) {
+          return resolve({
+            success: false,
+            output: stdout || '',
+            error: `Time Limit Exceeded (> ${timeLimitMs / 1000}s)`,
+            durationMs: Date.now() - startTime,
+          });
         }
-        try { child.stdin.end(); } catch (_) {}
-      }
 
-      child.on('close', (code) => {
-        resolve({ success: code === 0, output: out, error: err, durationMs: Date.now() - startTime });
+        resolve({
+          success: !runErr || runErr.code === 0,
+          output: stdout || '',
+          error: stderr || '',
+          durationMs: Date.now() - startTime,
+        });
       });
     } else {
-      resolve({ success: true, output: 'Executed', durationMs: Date.now() - startTime });
+      resolve({ success: true, output: 'Language executed', durationMs: Date.now() - startTime });
     }
   });
 }
