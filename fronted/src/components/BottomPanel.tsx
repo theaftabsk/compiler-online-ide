@@ -12,12 +12,6 @@ import {
 } from 'lucide-react';
 import { useIDE } from '@/context/IDEContext';
 
-interface TerminalInstance {
-  id: string;
-  name: string;
-  logs: string[];
-}
-
 export default function BottomPanel() {
   const { 
     theme, 
@@ -34,24 +28,16 @@ export default function BottomPanel() {
     code,
     language,
     activeFileTab,
+    terminals,
+    setTerminals,
+    activeTermId,
+    setActiveTermId,
+    handleAddNewTerminal,
+    handleKillTerminal,
     handleRunCode,
     handleRunTests
   } = useIDE();
 
-  // Single default clean terminal instance (no hardcoded node entries)
-  const [terminals, setTerminals] = useState<TerminalInstance[]>([
-    {
-      id: 'term-1',
-      name: '1: bash',
-      logs: [
-        'CodeLab Online IDE [Version 2.0.4]',
-        'Host: Cloud Docker Sandbox (GCC 13 / Clang Ready)',
-        'user@codelab:~$ '
-      ]
-    }
-  ]);
-
-  const [activeTermId, setActiveTermId] = useState<string>('term-1');
   const [panelHeight, setPanelHeight] = useState<number>(240);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -71,41 +57,6 @@ export default function BottomPanel() {
   useEffect(() => {
     terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeTerm?.logs]);
-
-  // Dynamically add new terminal instance only when user clicks (+)
-  const handleAddNewTerminal = () => {
-    const newId = `term-${Date.now()}`;
-    const newIndex = terminals.length + 1;
-    const newTerm: TerminalInstance = {
-      id: newId,
-      name: `${newIndex}: bash`,
-      logs: [
-        `[New Terminal Session #${newIndex} Initialized]`,
-        'user@codelab:~$ '
-      ]
-    };
-    setTerminals(prev => [...prev, newTerm]);
-    setActiveTermId(newId);
-    setPanelTab('terminal');
-  };
-
-  // Kill a specific terminal
-  const handleKillTerminal = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (terminals.length === 1) {
-      setTerminals([{
-        id: 'term-1',
-        name: '1: bash',
-        logs: ['user@codelab:~$ ']
-      }]);
-      return;
-    }
-    const filtered = terminals.filter(t => t.id !== id);
-    setTerminals(filtered);
-    if (activeTermId === id) {
-      setActiveTermId(filtered[filtered.length - 1].id);
-    }
-  };
 
   // Drag to resize
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -140,7 +91,7 @@ export default function BottomPanel() {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // CLI execution
+  // CLI execution inside terminal
   const handleCliSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!cliInput.trim()) return;
@@ -161,17 +112,53 @@ export default function BottomPanel() {
 
     if (cmd === 'ls' || cmd === 'dir') {
       currentLogs.push('main.c  problem.md  input.txt  Makefile  main.out');
-    } else if (cmd === 'pwd') {
+      currentLogs.push('user@codelab:~$ ');
+      updateLogs(currentLogs);
+      setCliInput('');
+      return;
+    }
+
+    if (cmd === 'pwd') {
       currentLogs.push('/workspace/codelab/src');
-    } else if (cmd === 'whoami') {
+      currentLogs.push('user@codelab:~$ ');
+      updateLogs(currentLogs);
+      setCliInput('');
+      return;
+    }
+
+    if (cmd === 'whoami') {
       currentLogs.push(student ? `${student.name.toLowerCase().replace(/\s+/g, '_')} (${student.machineNumber})` : 'codelab-user');
-    } else if (cmd === 'date') {
+      currentLogs.push('user@codelab:~$ ');
+      updateLogs(currentLogs);
+      setCliInput('');
+      return;
+    }
+
+    if (cmd === 'date') {
       currentLogs.push(new Date().toUTCString());
-    } else if (cmd.startsWith('echo ')) {
+      currentLogs.push('user@codelab:~$ ');
+      updateLogs(currentLogs);
+      setCliInput('');
+      return;
+    }
+
+    if (cmd.startsWith('echo ')) {
       currentLogs.push(raw.substring(5));
-    } else if (cmd === 'cat main.c' || (cmd.startsWith('cat ') && cmd.includes('main'))) {
+      currentLogs.push('user@codelab:~$ ');
+      updateLogs(currentLogs);
+      setCliInput('');
+      return;
+    }
+
+    if (cmd === 'cat main.c' || (cmd.startsWith('cat ') && cmd.includes('main'))) {
       currentLogs.push(code);
-    } else if (
+      currentLogs.push('user@codelab:~$ ');
+      updateLogs(currentLogs);
+      setCliInput('');
+      return;
+    }
+
+    if (
       cmd === 'run' || 
       cmd === './main' || 
       cmd === './main.out' ||
@@ -181,33 +168,28 @@ export default function BottomPanel() {
       cmd.startsWith('javac') ||
       cmd.startsWith('make')
     ) {
-      currentLogs.push(`[Compiling ${activeFileTab} inside sandbox...]`);
-      updateLogs(currentLogs);
       setCliInput('');
-
-      import('@/utils/codeRunner').then(({ executeCodeLive }) => {
-        executeCodeLive(language, code, customInput).then((res) => {
-          updateLogs([
-            ...currentLogs,
-            res.output || (res.error ? `Error: ${res.error}` : 'Process finished.'),
-            `\n[Execution Succeeded: ${res.durationMs}ms with return code ${res.exitCode}]`,
-            'user@codelab:~$ '
-          ]);
-        });
-      });
+      handleRunCode();
       return;
-    } else if (cmd === 'test') {
-      currentLogs.push('[Running evaluation test cases...]');
-      setPanelTab('testcases');
+    }
+
+    if (cmd === 'test') {
+      setCliInput('');
       handleRunTests();
-    } else if (cmd === 'help') {
+      return;
+    }
+
+    if (cmd === 'help') {
       currentLogs.push(
         'Available Shell Commands:\n  • run / ./main         : Compile & execute code with input buffer\n  • gcc main.c -o main   : Compile C program\n  • python main.py       : Run Python script\n  • cat <file>           : View file contents (e.g. cat main.c)\n  • ls / dir             : List directory files\n  • pwd                  : Print current working directory\n  • test                 : Evaluate all test cases\n  • whoami               : Show authenticated user\n  • clear / cls          : Clear terminal window\n  • echo <msg>           : Print message'
       );
-    } else {
-      currentLogs.push(`bash: ${raw}: command not found. Type "help" for valid commands.`);
+      currentLogs.push('user@codelab:~$ ');
+      updateLogs(currentLogs);
+      setCliInput('');
+      return;
     }
 
+    currentLogs.push(`bash: ${raw}: command not found. Type "help" for valid commands.`);
     currentLogs.push('user@codelab:~$ ');
     updateLogs(currentLogs);
     setCliInput('');

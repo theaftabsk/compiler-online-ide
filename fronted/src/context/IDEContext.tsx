@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ProgrammingLanguage, StudentSessionInfo, MachineAttendee, TestCase } from '@/types';
+import { executeCodeLive } from '@/utils/codeRunner';
 
 export type ThemeMode = 'vs-dark' | 'vs-light';
 export type AppViewMode = 'playground' | 'student_lab' | 'teacher_dashboard';
@@ -11,6 +12,12 @@ export interface VFSFile {
   content: string;
   language: string;
   isFolder?: boolean;
+}
+
+export interface TerminalInstance {
+  id: string;
+  name: string;
+  logs: string[];
 }
 
 export interface LabSessionData {
@@ -135,8 +142,16 @@ interface IDEContextType {
   setPanelTab: React.Dispatch<React.SetStateAction<'terminal' | 'testcases' | 'input' | 'anticheat'>>;
   customInput: string;
   setCustomInput: (val: string) => void;
-  terminalLogs: string[];
-  setTerminalLogs: React.Dispatch<React.SetStateAction<string[]>>;
+  
+  // Terminals State
+  terminals: TerminalInstance[];
+  setTerminals: React.Dispatch<React.SetStateAction<TerminalInstance[]>>;
+  activeTermId: string;
+  setActiveTermId: (id: string) => void;
+  handleAddNewTerminal: () => void;
+  handleKillTerminal: (id: string, e?: React.MouseEvent) => void;
+  appendTerminalLog: (logText: string) => void;
+  
   isRunning: boolean;
   testResults: any[];
   student: StudentSessionInfo | null;
@@ -153,8 +168,8 @@ interface IDEContextType {
   inspectedAttendee: MachineAttendee | null;
   setInspectedAttendee: (val: MachineAttendee | null) => void;
   attendees: MachineAttendee[];
-  handleRunCode: () => void;
-  handleRunTests: () => void;
+  handleRunCode: () => Promise<void>;
+  handleRunTests: () => Promise<void>;
   handleSubmitPractical: () => void;
   handleTeacherLogin: (id: string, pass: string) => boolean;
   handleTeacherLogout: () => void;
@@ -171,7 +186,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [activeSidebar, setActiveSidebar] = useState<'explorer' | 'problem' | 'faculty' | 'analytics'>('explorer');
   
-  // VFS state (Stored locally in localStorage)
+  // VFS state
   const [files, setFiles] = useState<VFSFile[]>(INITIAL_FILES);
   const [openTabs, setOpenTabs] = useState<string[]>(['main.c', 'problem.md']);
   const [activeFileTab, setActiveFileTab] = useState<string>('main.c');
@@ -180,11 +195,21 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [panelOpen, setPanelOpen] = useState<boolean>(true);
   const [panelTab, setPanelTab] = useState<'terminal' | 'testcases' | 'input' | 'anticheat'>('terminal');
   const [customInput, setCustomInput] = useState<string>('10');
-  const [terminalLogs, setTerminalLogs] = useState<string[]>([
-    'CodeLab Online IDE [Version 2.0.4]',
-    'Host: Cloud Docker Sandbox (GCC 13 / Clang Ready)',
-    'user@codelab:~$ '
+  
+  // Unified Terminals State
+  const [terminals, setTerminals] = useState<TerminalInstance[]>([
+    {
+      id: 'term-1',
+      name: '1: bash',
+      logs: [
+        'CodeLab Online IDE [Version 2.0.4]',
+        'Host: Cloud Docker Sandbox (GCC 13 / Python 3.11 Ready)',
+        'user@codelab:~$ '
+      ]
+    }
   ]);
+  const [activeTermId, setActiveTermId] = useState<string>('term-1');
+
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [testResults, setTestResults] = useState<any[]>([]);
 
@@ -202,7 +227,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [inspectedAttendee, setInspectedAttendee] = useState<MachineAttendee | null>(null);
   const [attendees, setAttendees] = useState<MachineAttendee[]>([]);
 
-  // Current active file code
   const currentFile = files.find(f => f.name === activeFileTab);
   const code = currentFile ? currentFile.content : '';
 
@@ -210,7 +234,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setFiles(prev => prev.map(f => f.name === activeFileTab ? { ...f, content: newContent } : f));
   };
 
-  // Load from localStorage on mount
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem('codelab_theme') as ThemeMode;
@@ -220,7 +243,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     } catch (_) {}
   }, []);
 
-  // Save to localStorage (Zero server load)
   useEffect(() => {
     try {
       localStorage.setItem('codelab_theme', theme);
@@ -239,7 +261,49 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
   }, [theme]);
 
-  // VFS Handlers: Create new file
+  // Append log to active terminal
+  const appendTerminalLog = (logText: string) => {
+    setTerminals(prev => prev.map(t => {
+      if (t.id === activeTermId) {
+        return { ...t, logs: [...t.logs, logText] };
+      }
+      return t;
+    }));
+  };
+
+  const handleAddNewTerminal = () => {
+    const newId = `term-${Date.now()}`;
+    const newIndex = terminals.length + 1;
+    const newTerm: TerminalInstance = {
+      id: newId,
+      name: `${newIndex}: bash`,
+      logs: [
+        `[New Terminal Session #${newIndex} Initialized]`,
+        'user@codelab:~$ '
+      ]
+    };
+    setTerminals(prev => [...prev, newTerm]);
+    setActiveTermId(newId);
+    setPanelTab('terminal');
+  };
+
+  const handleKillTerminal = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (terminals.length === 1) {
+      setTerminals([{
+        id: 'term-1',
+        name: '1: bash',
+        logs: ['user@codelab:~$ ']
+      }]);
+      return;
+    }
+    const filtered = terminals.filter(t => t.id !== id);
+    setTerminals(filtered);
+    if (activeTermId === id) {
+      setActiveTermId(filtered[filtered.length - 1].id);
+    }
+  };
+
   const createNewFile = (name: string) => {
     const cleanName = name.trim();
     if (!cleanName || files.some(f => f.name === cleanName)) return;
@@ -262,7 +326,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setActiveFileTab(cleanName);
   };
 
-  // Create new folder (virtual)
   const createNewFolder = (name: string) => {
     const cleanName = name.trim();
     if (!cleanName || files.some(f => f.name === cleanName)) return;
@@ -275,7 +338,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setFiles(prev => [...prev, newFolder]);
   };
 
-  // Delete file
   const deleteFile = (name: string) => {
     if (files.length <= 1) return;
     setFiles(prev => prev.filter(f => f.name !== name));
@@ -288,7 +350,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Open file tab
   const openFileInEditor = (name: string) => {
     if (!openTabs.includes(name)) {
       setOpenTabs(prev => [...prev, name]);
@@ -296,7 +357,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setActiveFileTab(name);
   };
 
-  // Close file tab (Kata button on tab)
   const closeFileTab = (name: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     const updated = openTabs.filter(t => t !== name);
@@ -326,33 +386,53 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // FULLY INTEGRATED RUN CODE HANDLER (Works 100% on Run Button & Terminal)
   const handleRunCode = async () => {
     setIsRunning(true);
     setPanelOpen(true);
     setPanelTab('terminal');
 
-    setTerminalLogs(prev => [
-      ...prev,
-      `user@codelab:~$ gcc -O2 ${activeFileTab} -o main && ./main`,
-      `[Compiling and running inside sandbox...]`
-    ]);
+    const cmdStr = `user@codelab:~$ gcc -O2 ${activeFileTab} -o main && ./main`;
+    
+    // Add start log
+    setTerminals(prev => prev.map(t => {
+      if (t.id === activeTermId) {
+        return {
+          ...t,
+          logs: [...t.logs, cmdStr, '[Compiling and executing in Docker sandbox...]']
+        };
+      }
+      return t;
+    }));
 
     try {
-      const { executeCodeLive } = await import('@/utils/codeRunner');
       const result = await executeCodeLive(language, code, customInput);
 
-      setTerminalLogs(prev => [
-        ...prev,
-        result.output || (result.error ? `Error: ${result.error}` : 'Process exited.'),
-        `\n[Execution Succeeded: ${result.durationMs}ms with return code ${result.exitCode}]`,
-        'user@codelab:~$ '
-      ]);
+      setTerminals(prev => prev.map(t => {
+        if (t.id === activeTermId) {
+          const finalOutput = result.output || (result.error ? `Error: ${result.error}` : '(Execution completed)');
+          return {
+            ...t,
+            logs: [
+              ...t.logs,
+              finalOutput,
+              `[Execution Succeeded: ${result.durationMs}ms with exit code ${result.exitCode}]`,
+              'user@codelab:~$ '
+            ]
+          };
+        }
+        return t;
+      }));
     } catch (err: any) {
-      setTerminalLogs(prev => [
-        ...prev,
-        `Runtime Error: ${err.message}`,
-        'user@codelab:~$ '
-      ]);
+      setTerminals(prev => prev.map(t => {
+        if (t.id === activeTermId) {
+          return {
+            ...t,
+            logs: [...t.logs, `Runtime Error: ${err.message}`, 'user@codelab:~$ ']
+          };
+        }
+        return t;
+      }));
     } finally {
       setIsRunning(false);
     }
@@ -371,7 +451,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     ];
 
     try {
-      const { executeCodeLive } = await import('@/utils/codeRunner');
       const evaluated = [];
 
       for (let i = 0; i < cases.length; i++) {
@@ -404,15 +483,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     if (student) {
       setStudent(prev => prev ? { ...prev, submitted: true, score: 100 } : null);
     }
-    
-    try {
-      const confetti = require('canvas-confetti');
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 }
-      });
-    } catch (_) {}
   };
 
   const handleTeacherLogin = (id: string, pass: string): boolean => {
@@ -519,8 +589,13 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         setPanelTab,
         customInput,
         setCustomInput,
-        terminalLogs,
-        setTerminalLogs,
+        terminals,
+        setTerminals,
+        activeTermId,
+        setActiveTermId,
+        handleAddNewTerminal,
+        handleKillTerminal,
+        appendTerminalLog,
         isRunning,
         testResults,
         student,
