@@ -20,8 +20,6 @@ export default function BottomPanel() {
     panelTab, 
     setPanelTab, 
     testResults, 
-    customInput, 
-    setCustomInput, 
     viewMode, 
     student,
     activeSession,
@@ -43,6 +41,10 @@ export default function BottomPanel() {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showRightTerminalList, setShowRightTerminalList] = useState<boolean>(true);
   const [cliInput, setCliInput] = useState<string>('');
+  
+  // Interactive Live STDIN state (waiting for user to type input like in real VS Code)
+  const [waitingForStdin, setWaitingForStdin] = useState<boolean>(false);
+  const [pendingPromptText, setPendingPromptText] = useState<string>('');
 
   const terminalBottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,7 +58,8 @@ export default function BottomPanel() {
 
   useEffect(() => {
     terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeTerm?.logs]);
+    inputRef.current?.focus();
+  }, [activeTerm?.logs, waitingForStdin]);
 
   // Drag to resize
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -91,12 +94,61 @@ export default function BottomPanel() {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // CLI execution inside terminal
-  const handleCliSubmit = (e: React.FormEvent) => {
+  // Interactive CLI submit (Handles both normal commands and manual user STDIN input)
+  const handleCliSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cliInput.trim()) return;
+    const userInput = cliInput;
+    setCliInput('');
 
-    const raw = cliInput.trim();
+    // CASE 1: The program was paused waiting for user's manual input (like VS Code scanf)
+    if (waitingForStdin) {
+      setWaitingForStdin(false);
+      
+      // Echo user's typed input into the log line
+      const updatedLogs = [...(activeTerm?.logs || [])];
+      if (updatedLogs.length > 0) {
+        updatedLogs[updatedLogs.length - 1] = `${pendingPromptText}${userInput}`;
+      }
+
+      setTerminals(prev => prev.map(t => t.id === activeTermId ? { ...t, logs: updatedLogs } : t));
+
+      // Execute code with user's manual input
+      try {
+        const { executeCodeLive } = await import('@/utils/codeRunner');
+        const res = await executeCodeLive(language, code, userInput);
+        
+        let out = res.output || '';
+        // Remove prompt prefix if already printed
+        if (pendingPromptText && out.startsWith(pendingPromptText.trim())) {
+          out = out.replace(pendingPromptText.trim(), '').trim();
+        }
+
+        setTerminals(prev => prev.map(t => {
+          if (t.id === activeTermId) {
+            return {
+              ...t,
+              logs: [
+                ...t.logs,
+                out || (res.error ? `Error: ${res.error}` : ''),
+                `[Process completed in ${res.durationMs}ms with exit code 0]`,
+                'user@codelab:~$ '
+              ]
+            };
+          }
+          return t;
+        }));
+      } catch (err: any) {
+        setTerminals(prev => prev.map(t => t.id === activeTermId ? {
+          ...t,
+          logs: [...t.logs, `Runtime Error: ${err.message}`, 'user@codelab:~$ ']
+        } : t));
+      }
+      return;
+    }
+
+    if (!userInput.trim()) return;
+
+    const raw = userInput.trim();
     const parts = raw.split(/\s+/);
     const cmd = parts[0].toLowerCase();
     const arg = parts.slice(1).join(' ');
@@ -109,7 +161,6 @@ export default function BottomPanel() {
 
     if (cmd === 'clear' || cmd === 'cls') {
       updateLogs(['user@codelab:~$ ']);
-      setCliInput('');
       return;
     }
 
@@ -117,7 +168,6 @@ export default function BottomPanel() {
       currentLogs.push('main.c  problem.md  Makefile  main.out');
       currentLogs.push('user@codelab:~$ ');
       updateLogs(currentLogs);
-      setCliInput('');
       return;
     }
 
@@ -125,7 +175,6 @@ export default function BottomPanel() {
       currentLogs.push('/workspace/codelab/src');
       currentLogs.push('user@codelab:~$ ');
       updateLogs(currentLogs);
-      setCliInput('');
       return;
     }
 
@@ -133,7 +182,6 @@ export default function BottomPanel() {
       currentLogs.push(student ? `${student.name.toLowerCase().replace(/\s+/g, '_')} (${student.machineNumber})` : 'codelab-user');
       currentLogs.push('user@codelab:~$ ');
       updateLogs(currentLogs);
-      setCliInput('');
       return;
     }
 
@@ -141,10 +189,10 @@ export default function BottomPanel() {
       currentLogs.push(code);
       currentLogs.push('user@codelab:~$ ');
       updateLogs(currentLogs);
-      setCliInput('');
       return;
     }
 
+    // Run command triggered from terminal
     if (
       cmd === 'run' || 
       cmd === './main' || 
@@ -153,33 +201,108 @@ export default function BottomPanel() {
       cmd.startsWith('python')
     ) {
       if (arg) {
-        setCustomInput(arg);
+        // Direct argument supplied (e.g. run 7)
+        runDirectlyWithInput(arg);
+      } else {
+        // Check if code has scanf / input
+        startInteractiveRun();
       }
-      setCliInput('');
-      handleRunCode();
       return;
     }
 
     if (cmd === 'test') {
-      setCliInput('');
       handleRunTests();
       return;
     }
 
     if (cmd === 'help') {
       currentLogs.push(
-        'Available Shell Commands:\n  • run [input]          : Compile & execute (e.g. run 7 or run 10)\n  • gcc main.c -o main   : Compile C program\n  • python script.py     : Run Python script\n  • cat <file>           : View file contents\n  • ls / dir             : List files\n  • test                 : Evaluate all test cases\n  • clear / cls          : Clear terminal'
+        'Available Shell Commands:\n  • run                  : Run code interactively (prompt will ask for input)\n  • run <input>          : Run code with direct input\n  • gcc main.c -o main   : Compile C program\n  • python script.py     : Run Python script\n  • ls / dir             : List files\n  • clear / cls          : Clear terminal buffer'
       );
       currentLogs.push('user@codelab:~$ ');
       updateLogs(currentLogs);
-      setCliInput('');
       return;
     }
 
     currentLogs.push(`bash: ${raw}: command not found. Type "help" for valid commands.`);
     currentLogs.push('user@codelab:~$ ');
     updateLogs(currentLogs);
-    setCliInput('');
+  };
+
+  // Start Interactive Run (Pauses at scanf prompt like real VS Code)
+  const startInteractiveRun = () => {
+    const hasScanf = code.includes('scanf(') || code.includes('input(') || code.includes('cin >>');
+    
+    // Extract prompt before scanf if any (e.g. printf("Enter a number: ");)
+    let promptText = '';
+    const promptMatch = code.match(/printf\s*\(\s*["']([^"']+)["']\s*\)/);
+    if (promptMatch && hasScanf) {
+      promptText = promptMatch[1].replace(/\\n/g, '\n');
+    }
+
+    if (hasScanf) {
+      // Pause in terminal waiting for user's manual keyboard input
+      setPendingPromptText(promptText);
+      setWaitingForStdin(true);
+
+      setTerminals(prev => prev.map(t => {
+        if (t.id === activeTermId) {
+          return {
+            ...t,
+            logs: [
+              ...t.logs,
+              `user@codelab:~$ gcc -O2 ${activeFileTab} -o main && ./main`,
+              promptText || 'Input: '
+            ]
+          };
+        }
+        return t;
+      }));
+    } else {
+      // Direct run without input
+      runDirectlyWithInput('');
+    }
+  };
+
+  const runDirectlyWithInput = async (inputStr: string) => {
+    setTerminals(prev => prev.map(t => {
+      if (t.id === activeTermId) {
+        return {
+          ...t,
+          logs: [
+            ...t.logs,
+            `user@codelab:~$ gcc -O2 ${activeFileTab} -o main && ./main`,
+            '[Compiling and executing in Docker sandbox...]'
+          ]
+        };
+      }
+      return t;
+    }));
+
+    try {
+      const { executeCodeLive } = await import('@/utils/codeRunner');
+      const res = await executeCodeLive(language, code, inputStr);
+      
+      setTerminals(prev => prev.map(t => {
+        if (t.id === activeTermId) {
+          return {
+            ...t,
+            logs: [
+              ...t.logs,
+              res.output || (res.error ? `Error: ${res.error}` : '(Execution completed)'),
+              `[Process completed in ${res.durationMs}ms with exit code ${res.exitCode}]`,
+              'user@codelab:~$ '
+            ]
+          };
+        }
+        return t;
+      }));
+    } catch (err: any) {
+      setTerminals(prev => prev.map(t => t.id === activeTermId ? {
+        ...t,
+        logs: [...t.logs, `Runtime Error: ${err.message}`, 'user@codelab:~$ ']
+      } : t));
+    }
   };
 
   const currentHeight = isFullscreen ? 'calc(100vh - 75px)' : `${panelHeight}px`;
@@ -201,7 +324,7 @@ export default function BottomPanel() {
         </div>
       )}
 
-      {/* VS Code Terminal Header (Clean: TERMINAL + TEST CASES) */}
+      {/* VS Code Terminal Header (TERMINAL + TEST CASES) */}
       <div className={`h-8 px-3 flex items-center justify-between border-b text-[11px] font-sans tracking-wide select-none shrink-0 ${isDark ? 'bg-[#181818] border-[#2b2b2b] text-[#969696]' : 'bg-[#f3f3f3] border-[#e7e7e7] text-[#616161]'}`}>
         
         {/* Left Tabs */}
@@ -257,6 +380,7 @@ export default function BottomPanel() {
           {/* Clear Buffer */}
           <button 
             onClick={() => {
+              setWaitingForStdin(false);
               setTerminals(prev => prev.map(t => t.id === activeTermId ? { ...t, logs: ['user@codelab:~$ '] } : t));
             }} 
             title="Clear Terminal Output"
@@ -288,7 +412,7 @@ export default function BottomPanel() {
       {/* Main Terminal Body */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* TAB 1: TERMINAL BUFFER */}
+        {/* TAB 1: TERMINAL BUFFER (Interactive Live Terminal with manual STDIN prompt) */}
         {panelTab === 'terminal' && (
           <div 
             onClick={() => inputRef.current?.focus()}
@@ -298,15 +422,23 @@ export default function BottomPanel() {
               <div key={i} className="whitespace-pre-wrap leading-relaxed">{log}</div>
             ))}
 
+            {/* Interactive Live Input Prompt */}
             <form onSubmit={handleCliSubmit} className="flex items-center gap-1.5 pt-1">
-              <span className="text-[#0078d4] font-bold">user@codelab:~$</span>
+              {waitingForStdin ? (
+                // Waiting for user to type input value (e.g. 7 or 12)
+                <span className="text-amber-400 font-bold animate-pulse">&gt;&gt;&gt;</span>
+              ) : (
+                <span className="text-[#0078d4] font-bold">user@codelab:~$</span>
+              )}
+              
               <input
                 ref={inputRef}
                 type="text"
+                autoFocus
                 value={cliInput}
                 onChange={(e) => setCliInput(e.target.value)}
-                placeholder="type command (e.g. run, run 7, gcc main.c -o main, ls, help)..."
-                className={`flex-1 bg-transparent focus:outline-none text-xs font-mono caret-[#0078d4] ${isDark ? 'text-white' : 'text-gray-900'}`}
+                placeholder={waitingForStdin ? "type your input number/text here and press Enter..." : "type command (e.g. run, ls, help)..."}
+                className={`flex-1 bg-transparent focus:outline-none text-xs font-mono caret-[#0078d4] ${waitingForStdin ? 'text-amber-300 font-bold placeholder:text-amber-500/60' : (isDark ? 'text-white' : 'text-gray-900')}`}
               />
             </form>
 
@@ -319,7 +451,7 @@ export default function BottomPanel() {
           <div className="flex-1 p-3 overflow-y-auto space-y-2">
             {testResults.length === 0 ? (
               <div className="opacity-70 text-center py-6 font-sans text-xs">
-                Click <strong>"Tests"</strong> above or type <code className="text-[#0078d4] bg-gray-700/20 px-1 py-0.5 rounded font-mono">test</code> in terminal.
+                Click <strong>"Tests"</strong> above to run automated test cases.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -356,7 +488,7 @@ export default function BottomPanel() {
 
         {/* Right Sidebar Terminal Instances */}
         {showRightTerminalList && panelTab === 'terminal' && (
-          <div className={`w-40 border-l flex flex-col shrink-0 p-1.5 space-y-1 font-mono text-[11px] select-none ${isDark ? 'bg-[#181818] border-[#2b2b2b]' : 'bg-[#f3f3f3] border-[#e7e7e7]'}`}
+          <div className={`w-40 border-l flex flex-col shrink-0 p-1.5 space-y-1 font-mono text-[11px] select-none ${isDark ? 'bg-[#181818] border-[#2b2b2b]' : 'bg-[#f3f3f3] border-[#e7e7e7]'}`}>
             
             <div className="text-[10px] font-bold opacity-50 px-2 py-0.5 uppercase">
               Terminals ({terminals.length})

@@ -387,14 +387,14 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   };
 
   // FULLY INTEGRATED RUN CODE HANDLER (Works 100% on Run Button & Terminal)
-  const handleRunCode = async () => {
+  const handleRunCode = async (explicitInput?: string) => {
     setIsRunning(true);
     setPanelOpen(true);
     setPanelTab('terminal');
 
+    const inputToUse = explicitInput !== undefined ? explicitInput : customInput;
     const cmdStr = `user@codelab:~$ gcc -O2 ${activeFileTab} -o main && ./main`;
-    
-    // Add start log
+
     setTerminals(prev => prev.map(t => {
       if (t.id === activeTermId) {
         return {
@@ -406,7 +406,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }));
 
     try {
-      const result = await executeCodeLive(language, code, customInput);
+      const result = await executeCodeLive(language, code, inputToUse);
 
       setTerminals(prev => prev.map(t => {
         if (t.id === activeTermId) {
