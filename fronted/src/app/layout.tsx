@@ -28,56 +28,73 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://app.restuvexo.shop'),
+  metadataBase: new URL('https://kaspro.online'),
   title: {
-    default: 'CodeLab Online IDE | Fast Online C, C++, Java & Python Compiler',
-    template: '%s | CodeLab Online IDE',
+    default: 'Kaspro Online Compiler | #1 Online C Compiler with scanf | by ITVEXO',
+    template: '%s | Kaspro Online Compiler - ITVEXO',
   },
-  description: 'CodeLab is an ultra-fast, secure online C compiler (GCC 13.3), C++ IDE, and Python sandbox. Features interactive terminal input for scanf/cin, zero-lag execution, test-case grading, and live student lab monitoring.',
+  description: 'Kaspro Online Compiler is the fastest, ultra-secure online C compiler (GCC 13.3), C++ IDE, and Python cloud sandbox by ITVEXO. Features interactive terminal input for scanf and cin, sub-50ms execution speed, automated grading, and live student lab monitoring.',
   keywords: [
     'online c compiler',
     'c compiler online',
+    'kaspro online compiler',
+    'kaspro compiler',
+    'kaspro online ide',
     'c online compiler with scanf',
+    'online c compiler with input',
+    'fastest online c compiler',
+    'best c compiler online',
     'run c program online',
     'gcc online compiler',
+    'gcc 13 online compiler',
     'c++ online compiler',
     'python online compiler',
     'online ide',
     'cloud c compiler',
-    'fast online c compiler',
+    'itvexo online compiler',
+    'itvexo compiler',
+    'itvexo produt',
+    'itvexo',
     'interactive c terminal online',
     'centralized programming lab',
     'computer science lab system',
-    'brainware university coding lab',
-    'code runner online',
-    'free online coding environment'
+    'free online coding environment',
+    'code runner online'
   ],
-  authors: [{ name: 'Aftab Sk', url: 'https://github.com/theaftabsk' }],
-  creator: 'Aftab Sk',
-  publisher: 'CodeLab IDE',
-  applicationName: 'CodeLab Online IDE',
+  authors: [{ name: 'ITVEXO', url: 'https://kaspro.online' }],
+  creator: 'ITVEXO',
+  publisher: 'ITVEXO',
+  applicationName: 'Kaspro Online Compiler',
   generator: 'Next.js',
   manifest: '/manifest.webmanifest',
   alternates: {
-    canonical: 'https://app.restuvexo.shop',
+    canonical: 'https://kaspro.online',
     languages: {
-      'en-US': 'https://app.restuvexo.shop',
-      'bn-BD': 'https://app.restuvexo.shop',
+      'en-US': 'https://kaspro.online',
+      'bn-BD': 'https://kaspro.online',
     },
   },
   openGraph: {
     type: 'website',
-    url: 'https://app.restuvexo.shop',
-    title: 'CodeLab Online IDE | Fast Online C, C++, Java & Python Compiler',
-    description: 'Execute C (GCC 13), C++, and Python code in sub-50ms with interactive terminal input for scanf, real-time lab monitoring, and auto test grading.',
-    siteName: 'CodeLab IDE',
+    url: 'https://kaspro.online',
+    title: 'Kaspro Online Compiler | #1 Fast Online C Compiler by ITVEXO',
+    description: 'Execute C (GCC 13), C++, and Python code in 30ms. Supports interactive terminal input for scanf, real-time classroom lab monitoring, and instant output.',
+    siteName: 'Kaspro Online Compiler - by ITVEXO',
     locale: 'en_US',
+    images: [
+      {
+        url: 'https://kaspro.online/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Kaspro Online Compiler - ITVEXO Product',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'CodeLab Online IDE - Fast Online C Compiler',
-    description: 'Compile and run C, C++, and Python programs instantly online with interactive scanf support and live student lab monitoring.',
-    creator: '@theaftabsk',
+    title: 'Kaspro Online Compiler - #1 Online C Compiler with scanf (ITVEXO)',
+    description: 'Ultra-fast online C, C++, and Python compiler with interactive terminal input for scanf. An official ITVEXO Product.',
+    creator: '@itvexo',
   },
   robots: {
     index: true,
@@ -91,8 +108,8 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
-  category: 'Developer Tools & Education',
-  classification: 'Online Compiler, Educational Technology, Cloud IDE',
+  category: 'Developer Tools & Online Compiler',
+  classification: 'Online Compiler, Educational Technology, Cloud IDE, Developer Tools',
 };
 
 export default function RootLayout({
@@ -105,10 +122,10 @@ export default function RootLayout({
     '@graph': [
       {
         '@type': 'WebApplication',
-        '@id': 'https://app.restuvexo.shop/#webapp',
-        'name': 'CodeLab Online IDE',
-        'url': 'https://app.restuvexo.shop',
-        'description': 'High-performance online C, C++, Java, and Python compiler with real-time interactive terminal input for scanf and centralized classroom laboratory monitoring.',
+        '@id': 'https://kaspro.online/#webapp',
+        'name': 'Kaspro Online Compiler',
+        'url': 'https://kaspro.online',
+        'description': 'The fastest online C compiler, C++ IDE, and Python coding platform by ITVEXO. Features interactive terminal input for scanf, sub-50ms execution speed, and live educational lab monitoring.',
         'applicationCategory': 'DeveloperApplication',
         'operatingSystem': 'All',
         'browserRequirements': 'Requires JavaScript. Requires HTML5.',
@@ -126,18 +143,80 @@ export default function RootLayout({
           'Automated test case grading and evaluation',
           'Cloud-isolated secure sandbox execution',
         ],
+        'provider': {
+          '@type': 'Organization',
+          'name': 'ITVEXO',
+          'url': 'https://kaspro.online',
+        },
         'author': {
-          '@type': 'Person',
-          'name': 'Aftab Sk',
-          'url': 'https://github.com/theaftabsk',
+          '@type': 'Organization',
+          'name': 'ITVEXO',
+          'url': 'https://kaspro.online',
         },
       },
       {
-        '@type': 'EducationalOrganization',
-        '@id': 'https://app.restuvexo.shop/#organization',
-        'name': 'CodeLab Digital Programming Lab',
-        'url': 'https://app.restuvexo.shop',
-        'description': 'Centralized institutional programming laboratory platform for universities and computer science courses.',
+        '@type': 'Organization',
+        '@id': 'https://kaspro.online/#organization',
+        'name': 'ITVEXO',
+        'url': 'https://kaspro.online',
+        'logo': 'https://kaspro.online/icon',
+        'description': 'ITVEXO - Creator of modern digital products, developer tools, and intelligent laboratory software including Kaspro Online Compiler.',
+      },
+      {
+        '@type': 'FAQPage',
+        '@id': 'https://kaspro.online/#faq',
+        'mainEntity': [
+          {
+            '@type': 'Question',
+            'name': 'What is Kaspro Online Compiler?',
+            'acceptedAnswer': {
+              '@type': 'Answer',
+              'text': 'Kaspro Online Compiler by ITVEXO is a next-generation cloud compiler that enables developers, students, and educators to write, compile, and execute C, C++, Java, and Python code instantly in a web browser without installing any software.',
+            },
+          },
+          {
+            '@type': 'Question',
+            'name': 'Does Kaspro Online Compiler support scanf and user input?',
+            'acceptedAnswer': {
+              '@type': 'Answer',
+              'text': 'Yes! Kaspro Online Compiler features a real-time interactive terminal that prompts users whenever scanf(), cin, or input() is used, supporting multiple sequential inputs without timing out.',
+            },
+          },
+          {
+            '@type': 'Question',
+            'name': 'Which C compiler does Kaspro use?',
+            'acceptedAnswer': {
+              '@type': 'Answer',
+              'text': 'Kaspro uses the official GCC 13.3 compiler with -O2 optimizations and Linux sandbox security, providing lightning-fast execution in less than 50 milliseconds.',
+            },
+          },
+          {
+            '@type': 'Question',
+            'name': 'Is Kaspro Online Compiler free to use?',
+            'acceptedAnswer': {
+              '@type': 'Answer',
+              'text': 'Yes, Kaspro Online Compiler by ITVEXO is 100% free for students, teachers, and developers worldwide.',
+            },
+          },
+        ],
+      },
+      {
+        '@type': 'BreadcrumbList',
+        '@id': 'https://kaspro.online/#breadcrumb',
+        'itemListElement': [
+          {
+            '@type': 'ListItem',
+            'position': 1,
+            'name': 'Home',
+            'item': 'https://kaspro.online',
+          },
+          {
+            '@type': 'ListItem',
+            'position': 2,
+            'name': 'Online C Compiler',
+            'item': 'https://kaspro.online',
+          },
+        ],
       },
     ],
   };
@@ -146,7 +225,7 @@ export default function RootLayout({
     <html lang="en" className={`dark ${inter.variable} ${outfit.variable} ${firaCode.variable}`}>
       <head>
         <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
-        <link rel="canonical" href="https://app.restuvexo.shop" />
+        <link rel="canonical" href="https://kaspro.online" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSchema) }}

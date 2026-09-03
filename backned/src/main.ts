@@ -24,9 +24,9 @@ async function bootstrap() {
   await app.listen(PORT);
 
   logger.log(`=======================================================`);
-  logger.log(`🚀 Centralized Digital Lab NestJS API is RUNNING`);
-  logger.log(`📡 REST API & WebSockets Active: http://localhost:${PORT}`);
-  logger.log(`🏛️ Institution: Brainware University (AI & ML, Section J)`);
+  logger.log(`🚀 Kaspro Online Compiler API (by ITVEXO) is RUNNING`);
+  logger.log(`📡 Endpoints: https://api.kaspro.online / http://localhost:${PORT}`);
+  logger.log(`🏛️ Product: ITVEXO | Ultra-Fast GCC 13 & Sandbox Engine`);
   logger.log(`=======================================================`);
 }
 bootstrap();

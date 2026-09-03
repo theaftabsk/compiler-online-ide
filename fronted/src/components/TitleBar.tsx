@@ -43,7 +43,8 @@ export default function TitleBar() {
           <div className="w-5 h-5 rounded bg-[#0078d4] flex items-center justify-center text-[10px] text-white shadow-sm">
             <Code2 className="w-3 h-3" />
           </div>
-          <span className="font-semibold text-xs tracking-wide">CodeLab <span className="text-[#0078d4]">IDE</span></span>
+          <span className="font-bold text-xs tracking-wide">Kaspro <span className="text-[#0078d4]">Compiler</span></span>
+          <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-[#0078d4]/15 text-[#0078d4] border border-[#0078d4]/30">ITVEXO</span>
         </Link>
 
         {viewMode === 'student_lab' && student && (

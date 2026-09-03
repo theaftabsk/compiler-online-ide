@@ -87,7 +87,7 @@ export default function Sidebar() {
               <div className="flex items-center gap-1.5 cursor-pointer">
                 <ChevronDown className="w-3.5 h-3.5" />
                 <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
-                <span className="truncate">CODELAB-PROJECT</span>
+                <span className="truncate font-bold tracking-wider text-[#0078d4]">KASPRO-WORKSPACE</span>
               </div>
 
               {/* Action Buttons: New File, New Folder */}

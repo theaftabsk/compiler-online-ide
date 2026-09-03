@@ -1,6 +1,6 @@
 /**
- * Universal Multi-Language Live Execution Engine for CodeLab Online IDE
- * Handles C, C++, Java, and Python with complete real-time evaluation & Docker sandbox fallback.
+ * Universal Multi-Language Live Execution Engine for Kaspro Online Compiler (by ITVEXO)
+ * Handles C (GCC 13), C++, Java, and Python with real-time evaluation & sandbox security.
  */
 
 export interface ExecutionResult {
