@@ -246,6 +246,7 @@ interface IDEContextType {
   createNewFile: (name: string) => void;
   createNewFolder: (name: string) => void;
   deleteFile: (name: string) => void;
+  renameFile: (oldName: string, newName: string) => void;
   closeFileTab: (name: string, e?: React.MouseEvent) => void;
   openFileInEditor: (name: string) => void;
   updateFileContent: (name: string, content: string) => void;
@@ -541,6 +542,16 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     if (activeFileTab === name) {
       const remaining = files.filter(f => f.name !== name && !f.isFolder);
       if (remaining.length > 0) setActiveFileTab(remaining[0].name);
+    }
+  };
+
+  const renameFile = (oldName: string, newName: string) => {
+    const cleanNewName = newName.trim();
+    if (!cleanNewName || files.some(f => f.name === cleanNewName)) return;
+    setFiles(prev => prev.map(f => f.name === oldName ? { ...f, name: cleanNewName } : f));
+    setOpenTabs(prev => prev.map(t => t === oldName ? cleanNewName : t));
+    if (activeFileTab === oldName) {
+      setActiveFileTab(cleanNewName);
     }
   };
 
@@ -907,7 +918,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       theme, toggleTheme, viewMode, setViewMode,
       sidebarOpen, setSidebarOpen, activeSidebar, setActiveSidebar,
       files, openTabs, activeFileTab, setActiveFileTab,
-      createNewFile, createNewFolder, deleteFile, closeFileTab, openFileInEditor, updateFileContent,
+      createNewFile, createNewFolder, deleteFile, renameFile, closeFileTab, openFileInEditor, updateFileContent,
       language, setLanguage, code, setCode,
       panelOpen, setPanelOpen, panelTab, setPanelTab,
       terminals, setTerminals, activeTermId, setActiveTermId,
