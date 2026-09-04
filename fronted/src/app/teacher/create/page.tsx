@@ -6,15 +6,18 @@ import { useRouter } from 'next/navigation';
 import { Plus, ArrowLeft, Hash, Key, Clock, ShieldCheck, Sun, Moon, Code2, Trash2 } from 'lucide-react';
 import { IDEProvider, useIDE } from '@/context/IDEContext';
 
+import { useTeacherAuth } from '@/context/TeacherAuthContext';
+
 function CreateSessionInner() {
   const router = useRouter();
+  const { teacher } = useTeacherAuth();
   const { theme, toggleTheme, handleCreateSession } = useIDE();
   const isDark = theme === 'vs-dark';
 
   const [subjectName, setSubjectName] = useState('Data Structures & Algorithms in C');
-  const [department, setDepartment] = useState('Computer Science & AI');
+  const [department, setDepartment] = useState(teacher?.departmentName || 'Computer Science & AI');
   const [batchName, setBatchName] = useState('Section J - 2nd Year');
-  const [teacherName, setTeacherName] = useState('Prof. S. Sengupta');
+  const [teacherName, setTeacherName] = useState(teacher?.fullName || 'Prof. Aftab Sk');
   const [questionTitle, setQuestionTitle] = useState('Check Positive, Negative, or Zero');
   const [questionDescription, setQuestionDescription] = useState('Write a program in C that reads an integer from standard input and prints Positive, Negative, or Zero.');
   const [timeLimit, setTimeLimit] = useState(90);
@@ -28,6 +31,7 @@ function CreateSessionInner() {
   const [newInput, setNewInput] = useState('');
   const [newExpected, setNewExpected] = useState('');
   const [newHidden, setNewHidden] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const addTestCase = () => {
     if (newInput.trim() && newExpected.trim()) {
@@ -50,21 +54,27 @@ function CreateSessionInner() {
     setTestCases(prev => prev.filter(t => t.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const created = handleCreateSession({
-      subjectName,
-      department,
-      batchName,
-      teacherName,
-      questionTitle,
-      questionDescription,
-      testCases,
-      timeLimitMinutes: Number(timeLimit),
-      totalMachines: 60,
-    });
+    setIsSubmitting(true);
+    try {
+      const created = await handleCreateSession({
+        subjectName,
+        department,
+        batchName,
+        teacherName: teacherName || teacher?.fullName || 'Faculty Incharge',
+        questionTitle,
+        questionDescription,
+        testCases,
+        timeLimitMinutes: Number(timeLimit),
+        totalMachines: 60,
+      });
 
-    router.push(`/teacher/session/${created.sessionCode}`);
+      router.push(`/teacher/session/${created.sessionCode}`);
+    } catch (err) {
+      console.error('Failed to create session:', err);
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -246,9 +256,10 @@ function CreateSessionInner() {
             </Link>
             <button
               type="submit"
-              className="px-6 py-2.5 bg-[#0078d4] hover:bg-[#006cc1] text-white font-bold rounded text-xs shadow flex items-center gap-2"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 bg-[#0078d4] hover:bg-[#006cc1] disabled:opacity-50 text-white font-bold rounded text-xs shadow flex items-center gap-2"
             >
-              <Key className="w-4 h-4" /> Generate Lab Session & PIN
+              <Key className="w-4 h-4" /> {isSubmitting ? 'Creating Lab Session in Database...' : 'Generate Lab Session & PIN'}
             </button>
           </div>
 

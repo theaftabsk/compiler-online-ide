@@ -36,11 +36,19 @@ function TeacherDashboardInner() {
     handleTeacherLogout,
     attendees,
     inspectedAttendee,
-    setInspectedAttendee
+    setInspectedAttendee,
+    fetchSessions,
   } = useIDE();
 
   const isDark = theme === 'vs-dark';
   const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
+
+  // Auto-refresh real sessions from database
+  useEffect(() => {
+    fetchSessions();
+    const interval = setInterval(fetchSessions, 10000);
+    return () => clearInterval(interval);
+  }, [fetchSessions]);
 
   // If not logged in, redirect to dedicated login page
   useEffect(() => {
@@ -234,9 +242,9 @@ function TeacherDashboardInner() {
             </div>
 
             <div className="flex items-center gap-4 text-xs font-mono">
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#0078d4]"></span> Coding (28)</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#107c41]"></span> Submitted (10)</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-500"></span> Empty (22)</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#0078d4]"></span> Coding ({attendees.filter(a => a.status === 'CODING').length})</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#107c41]"></span> Submitted ({attendees.filter(a => a.status === 'SUBMITTED').length})</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-500"></span> Available ({attendees.filter(a => a.status === 'EMPTY').length})</span>
             </div>
           </div>
 

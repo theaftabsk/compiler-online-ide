@@ -45,6 +45,52 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
+   * Get all practical sessions from PostgreSQL
+   */
+  async getAllSessions() {
+    const sessions = await this.prisma.practicalSession.findMany({
+      orderBy: { startedAt: 'desc' },
+      include: {
+        attendees: {
+          select: {
+            id: true,
+            machineNumber: true,
+            studentName: true,
+            rollNumber: true,
+            codingStatus: true,
+            onlineStatus: true,
+            score: true,
+            passedCases: true,
+            tabSwitchCount: true,
+          },
+        },
+      },
+    });
+
+    return sessions.map((s) => ({
+      id: s.id,
+      sessionCode: s.sessionCode,
+      sessionPassword: s.sessionPassword,
+      subjectName: s.subjectName,
+      department: s.department,
+      batchName: s.batchName,
+      sectionName: s.sectionName,
+      facultyName: s.facultyName,
+      labRoomName: s.labRoomName,
+      totalCapacity: s.totalCapacity,
+      questionTitle: s.questionTitle,
+      questionDescription: s.questionDescription,
+      status: s.status,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt,
+      attendeeCount: s.attendees.length,
+      codingCount: s.attendees.filter((a) => a.codingStatus === 'CODING').length,
+      submittedCount: s.attendees.filter((a) => a.codingStatus === 'SUBMITTED').length,
+      attendees: s.attendees,
+    }));
+  }
+
+  /**
    * Create a practical session in PostgreSQL
    */
   async createSession(payload: any) {
@@ -54,14 +100,14 @@ export class SessionsService implements OnModuleInit {
     const session = await this.prisma.practicalSession.create({
       data: {
         sessionCode: randomCode.toUpperCase(),
-        sessionPassword: randomPass,
+        sessionPassword: String(randomPass),
         subjectName: payload.subjectName || 'Programming Lab',
         department: payload.department || 'Computer Science & Engineering',
-        sectionName: payload.sectionName || 'Section A',
+        sectionName: payload.sectionName || payload.batchName || 'Section A',
         batchName: payload.batchName || 'Batch 2026',
-        facultyName: payload.facultyName || 'Faculty Incharge',
+        facultyName: payload.facultyName || payload.teacherName || 'Faculty Incharge',
         labRoomName: payload.labRoomName || 'Lab 101',
-        totalCapacity: payload.totalCapacity || 60,
+        totalCapacity: Number(payload.totalCapacity || payload.totalMachines || 60),
         questionTitle: payload.questionTitle || 'Lab Practical Assignment',
         questionDescription: payload.questionDescription || 'Solve the given problem.',
         status: 'ACTIVE',
@@ -114,6 +160,12 @@ export class SessionsService implements OnModuleInit {
 
     if (session.status === 'ENDED') {
       throw new ForbiddenException('This practical lab session has ended.');
+    }
+
+    if (session.sessionPassword && payload.password) {
+      if (session.sessionPassword.trim() !== payload.password.trim()) {
+        throw new ForbiddenException('Invalid session PIN or password.');
+      }
     }
 
     const machine = payload.machineNumber ? payload.machineNumber.toUpperCase() : 'PC-01';
@@ -308,6 +360,13 @@ export class SessionsService implements OnModuleInit {
         status: 'ENDED',
         endedAt: new Date(),
       },
+    });
+  }
+
+  async deleteSession(code: string) {
+    const normalizedCode = code.trim().toUpperCase();
+    return this.prisma.practicalSession.delete({
+      where: { sessionCode: normalizedCode },
     });
   }
 }

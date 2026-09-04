@@ -55,9 +55,10 @@ function StudentSessionInner() {
           )}
 
           <form 
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              const res = handleStudentJoinSession(sessionCode, enteredPass, name, roll, pcNum);
+              setErrorMsg(null);
+              const res = await handleStudentJoinSession(sessionCode, enteredPass, name, roll, pcNum);
               if (!res.success) setErrorMsg(res.message);
             }} 
             className="space-y-4 text-xs"

@@ -23,20 +23,29 @@ export default function StudentJoinModal() {
 
   if (!joinSessionModalOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setIsSubmitting(true);
 
-    const res = handleStudentJoinSession(
-      sessionCode,
-      sessionPass,
-      studentName,
-      rollNumber,
-      machineNumber
-    );
+    try {
+      const res = await handleStudentJoinSession(
+        sessionCode,
+        sessionPass,
+        studentName,
+        rollNumber,
+        machineNumber
+      );
 
-    if (!res.success) {
-      setErrorMsg(res.message);
+      if (!res.success) {
+        setErrorMsg(res.message);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to join session');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -153,9 +162,10 @@ export default function StudentJoinModal() {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-[#0078d4] hover:bg-[#006cc1] text-white font-bold rounded flex items-center gap-1.5 shadow"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-[#0078d4] hover:bg-[#006cc1] disabled:opacity-50 text-white font-bold rounded flex items-center gap-1.5 shadow"
             >
-              Authenticate & Enter Lab <ArrowRight className="w-3.5 h-3.5" />
+              {isSubmitting ? 'Authenticating...' : 'Authenticate & Enter Lab'} <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </form>

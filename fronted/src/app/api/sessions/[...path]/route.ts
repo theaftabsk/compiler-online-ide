@@ -48,3 +48,25 @@ export async function GET(req: NextRequest, { params }: { params: { path: string
     );
   }
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: { path: string[] } }) {
+  const subPath = params.path.join('/');
+  const targetUrl = `${BACKEND_URL}/api/sessions/${subPath}`;
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'DELETE',
+      headers: {
+        ...(req.headers.get('authorization') ? { 'Authorization': req.headers.get('authorization')! } : {}),
+      },
+    });
+
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, message: `Backend connection error: ${err.message}` },
+      { status: 502 }
+    );
+  }
+}

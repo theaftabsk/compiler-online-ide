@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ProgrammingLanguage, StudentSessionInfo, MachineAttendee, TestCase } from '@/types';
 import { executeCodeLive } from '@/utils/codeRunner';
 
@@ -290,9 +290,10 @@ interface IDEContextType {
   handleSubmitPractical: () => void;
   handleTeacherLogin: (id: string, pass: string) => boolean;
   handleTeacherLogout: () => void;
-  handleCreateSession: (session: Omit<LabSessionData, 'sessionCode' | 'sessionPassword' | 'createdAt' | 'isActive'>) => LabSessionData;
-  handleStudentJoinSession: (code: string, pass: string, name: string, roll: string, machine: string) => { success: boolean; message: string };
+  handleCreateSession: (session: Omit<LabSessionData, 'sessionCode' | 'sessionPassword' | 'createdAt' | 'isActive'>) => Promise<LabSessionData>;
+  handleStudentJoinSession: (code: string, pass: string, name: string, roll: string, machine: string) => Promise<{ success: boolean; message: string }>;
   handleLeaveLabSession: () => void;
+  fetchSessions: () => Promise<void>;
 }
 
 const IDEContext = createContext<IDEContextType | undefined>(undefined);
@@ -333,6 +334,39 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
   const [sessionsList, setSessionsList] = useState<LabSessionData[]>([DEFAULT_DEMO_SESSION]);
   const [activeSession, setActiveSession] = useState<LabSessionData | null>(DEFAULT_DEMO_SESSION);
+
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/sessions', { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.sessions) && data.sessions.length > 0) {
+        const mapped: LabSessionData[] = data.sessions.map((s: any) => ({
+          sessionCode: s.sessionCode,
+          sessionPassword: s.sessionPassword,
+          subjectName: s.subjectName,
+          department: s.department,
+          batchName: s.batchName,
+          teacherName: s.facultyName || 'Faculty Incharge',
+          questionTitle: s.questionTitle || 'Lab Practical',
+          questionDescription: s.questionDescription || '',
+          testCases: [],
+          timeLimitMinutes: 90,
+          totalMachines: s.totalCapacity || 60,
+          createdAt: s.startedAt,
+          isActive: s.status === 'ACTIVE',
+        }));
+        setSessionsList(mapped);
+        const active = mapped.find(s => s.isActive) || mapped[0];
+        if (active) setActiveSession(active);
+      }
+    } catch (err) {
+      console.warn('Could not fetch real sessions from DB:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
   const [student, setStudent] = useState<StudentSessionInfo | null>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -721,7 +755,21 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
   const handleSubmitPractical = () => {
     handleRunTests();
-    if (student) setStudent(prev => prev ? { ...prev, submitted: true, score: 100 } : null);
+    if (student && activeSession) {
+      setStudent(prev => prev ? { ...prev, submitted: true, score: 100 } : null);
+      fetch('/api/sessions/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionCode: activeSession.sessionCode,
+          machineNumber: student.machineNumber,
+          code: code,
+          submitted: true,
+          score: 100,
+          tabSwitches: student.tabSwitches || 0,
+        }),
+      }).catch(err => console.warn('Could not submit practical:', err));
+    }
   };
 
   const handleTeacherLogin = (id: string, pass: string): boolean => {
@@ -735,7 +783,38 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setIsTeacherLoggedIn(false); setTeacherEmail(''); setViewMode('playground');
   };
 
-  const handleCreateSession = (data: Omit<LabSessionData, 'sessionCode' | 'sessionPassword' | 'createdAt' | 'isActive'>): LabSessionData => {
+  const handleCreateSession = async (data: Omit<LabSessionData, 'sessionCode' | 'sessionPassword' | 'createdAt' | 'isActive'>): Promise<LabSessionData> => {
+    try {
+      const res = await fetch('/api/sessions/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (json?.success && json?.session) {
+        const newSession: LabSessionData = {
+          sessionCode: json.session.sessionCode,
+          sessionPassword: json.session.sessionPassword,
+          subjectName: json.session.subjectName,
+          department: json.session.department,
+          batchName: json.session.batchName,
+          teacherName: json.session.facultyName || data.teacherName,
+          questionTitle: json.session.questionTitle || data.questionTitle,
+          questionDescription: json.session.questionDescription || data.questionDescription,
+          testCases: data.testCases || [],
+          timeLimitMinutes: data.timeLimitMinutes || 90,
+          totalMachines: json.session.totalCapacity || data.totalMachines || 60,
+          createdAt: json.session.startedAt || new Date().toISOString(),
+          isActive: json.session.status === 'ACTIVE',
+        };
+        setSessionsList(prev => [newSession, ...prev.filter(s => s.sessionCode !== newSession.sessionCode)]);
+        setActiveSession(newSession);
+        return newSession;
+      }
+    } catch (err) {
+      console.error('API session creation failed, fallback to local:', err);
+    }
+
     const randomCode = `LAB-${Math.floor(1000 + Math.random() * 9000)}`;
     const randomPass = `${Math.floor(1000 + Math.random() * 9000)}`;
     const newSession: LabSessionData = {
@@ -747,49 +826,71 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     return newSession;
   };
 
-  const handleStudentJoinSession = (codeStr: string, pass: string, name: string, roll: string, machine: string): { success: boolean; message: string } => {
+  const handleStudentJoinSession = async (codeStr: string, pass: string, name: string, roll: string, machine: string): Promise<{ success: boolean; message: string }> => {
     const cleanCode = codeStr.trim().toUpperCase();
-    const targetSession = sessionsList.find(
-      s => s.sessionCode.toUpperCase() === cleanCode && s.sessionPassword === pass.trim()
-    ) || (cleanCode === 'LAB-2026' ? DEFAULT_DEMO_SESSION : null);
-
-    if (!targetSession) return { success: false, message: 'Invalid Session Code or Password.' };
-
-    const studentInfo: StudentSessionInfo = {
-      name: name.trim() || 'Aftab Sk',
-      rollNumber: roll.trim() || '538',
-      section: targetSession.batchName,
-      machineNumber: machine.trim() ? machine.trim().toUpperCase() : 'PC-14',
-      sessionCode: targetSession.sessionCode,
-      language: 'c',
-      submitted: false,
-      score: 0,
-      tabSwitches: 0,
-    };
-
-    setActiveSession(targetSession);
-    setStudent(studentInfo);
-    setViewMode('student_lab');
-    setJoinSessionModalOpen(false);
+    const studentName = name.trim() || 'Aftab Sk';
+    const rollNumber = roll.trim() || '538';
+    const machineNumber = machine.trim() ? machine.trim().toUpperCase() : 'PC-14';
 
     try {
-      localStorage.setItem('kaspro_student_info', JSON.stringify(studentInfo));
-    } catch (_) {}
+      const res = await fetch('/api/sessions/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionCode: cleanCode,
+          password: pass.trim(),
+          machineNumber,
+          name: studentName,
+          rollNumber,
+        }),
+      });
 
-    // REAL PostgreSQL API call: Register attendee in database
-    fetch('/api/sessions/join', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, message: data.message || 'Invalid Session Code or Password.' };
+      }
+
+      const targetSession: LabSessionData = {
+        sessionCode: data.session.sessionCode,
+        sessionPassword: data.session.sessionPassword,
+        subjectName: data.session.subjectName,
+        department: data.session.department,
+        batchName: data.session.batchName,
+        teacherName: data.session.facultyName || 'Faculty In-Charge',
+        questionTitle: data.session.questionTitle || 'Practical Exam',
+        questionDescription: data.session.questionDescription || '',
+        testCases: [],
+        timeLimitMinutes: 90,
+        totalMachines: data.session.totalCapacity || 60,
+        createdAt: data.session.startedAt,
+        isActive: data.session.status === 'ACTIVE',
+      };
+
+      const studentInfo: StudentSessionInfo = {
+        name: studentName,
+        rollNumber,
+        section: data.session.batchName,
+        machineNumber,
         sessionCode: targetSession.sessionCode,
-        machineNumber: studentInfo.machineNumber,
-        name: studentInfo.name,
-        rollNumber: studentInfo.rollNumber,
-        section: studentInfo.section,
-      }),
-    }).catch(err => console.warn('Could not reach sessions API:', err));
+        language: 'c',
+        submitted: false,
+        score: 0,
+        tabSwitches: 0,
+      };
 
-    return { success: true, message: 'Successfully joined lab session!' };
+      setActiveSession(targetSession);
+      setStudent(studentInfo);
+      setViewMode('student_lab');
+      setJoinSessionModalOpen(false);
+
+      try {
+        localStorage.setItem('kaspro_student_info', JSON.stringify(studentInfo));
+      } catch (_) {}
+
+      return { success: true, message: 'Successfully joined lab session!' };
+    } catch (err: any) {
+      return { success: false, message: `Could not connect to session server: ${err.message}` };
+    }
   };
 
   const handleLeaveLabSession = () => {
@@ -823,6 +924,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       handleRunCode, handleRunTests, handleSubmitPractical,
       handleTeacherLogin, handleTeacherLogout,
       handleCreateSession, handleStudentJoinSession, handleLeaveLabSession,
+      fetchSessions,
     }}>
       {children}
     </IDEContext.Provider>
