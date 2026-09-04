@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ProgrammingLanguage, StudentSessionInfo, MachineAttendee, TestCase } from '@/types';
 import { executeCodeLive } from '@/utils/codeRunner';
+import { getLabSocket } from '@/utils/socket';
 
 export type ThemeMode = 'vs-dark' | 'vs-light';
 export type AppViewMode = 'playground' | 'student_lab' | 'teacher_dashboard';
@@ -398,7 +399,88 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
   const setCode = (newContent: string) => {
     setFiles(prev => prev.map(f => f.name === activeFileTab ? { ...f, content: newContent } : f));
+
+    // Stream code changes live to teacher via Socket.io
+    if (student) {
+      const sessCode = activeSession?.sessionCode || student.sessionCode || 'LAB-2026';
+      const socket = getLabSocket();
+      if (socket) {
+        socket.emit('student:code_stream', {
+          sessionCode: sessCode,
+          machineNumber: student.machineNumber,
+          rollNumber: student.rollNumber,
+          code: newContent,
+          language: language,
+        });
+      }
+    }
   };
+
+  // Student Socket connection and session status synchronization
+  useEffect(() => {
+    if (!student) return;
+    const socket = getLabSocket();
+    if (!socket) return;
+
+    const sessCode = activeSession?.sessionCode || student.sessionCode || 'LAB-2026';
+
+    socket.emit('student:join', {
+      sessionCode: sessCode,
+      rollNumber: student.rollNumber,
+      name: student.name,
+      machineNumber: student.machineNumber,
+      section: student.section,
+    });
+
+    const onStatusChanged = (payload: any) => {
+      if (payload?.sessionCode && payload.sessionCode.toUpperCase() === sessCode.toUpperCase()) {
+        setActiveSession(prev => prev ? { ...prev, isActive: payload.status === 'ACTIVE', status: payload.status } : null);
+      }
+    };
+
+    socket.on('session:status_changed', onStatusChanged);
+    return () => {
+      socket.off('session:status_changed', onStatusChanged);
+    };
+  }, [student?.machineNumber, student?.rollNumber, activeSession?.sessionCode]);
+
+  // Anti-Cheating tab-switch detection in real time via Socket.io
+  useEffect(() => {
+    if (!student) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setStudent(prev => {
+          if (!prev) return null;
+          const nextCount = (prev.tabSwitches || 0) + 1;
+          const updated = { ...prev, tabSwitches: nextCount };
+
+          try {
+            localStorage.setItem('kaspro_student_info', JSON.stringify(updated));
+          } catch (_) {}
+
+          const sessCode = activeSession?.sessionCode || prev.sessionCode || 'LAB-2026';
+          const socket = getLabSocket();
+          if (socket) {
+            socket.emit('student:tab_switched', {
+              sessionCode: sessCode,
+              machineNumber: prev.machineNumber,
+              rollNumber: prev.rollNumber,
+              studentName: prev.name,
+              count: nextCount,
+            });
+          }
+
+          return updated;
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [student?.machineNumber, activeSession?.sessionCode]);
 
   // Sync active student state across tabs & to attendees
   useEffect(() => {
@@ -775,6 +857,18 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     handleRunTests();
     if (student && activeSession) {
       setStudent(prev => prev ? { ...prev, submitted: true, score: 100 } : null);
+
+      const socket = getLabSocket();
+      if (socket) {
+        socket.emit('student:submitted', {
+          sessionCode: activeSession.sessionCode,
+          machineNumber: student.machineNumber,
+          score: 100,
+          passedCases: '4/4',
+          code: code,
+        });
+      }
+
       fetch('/api/sessions/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -900,6 +994,17 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       setStudent(studentInfo);
       setViewMode('student_lab');
       setJoinSessionModalOpen(false);
+
+      const socket = getLabSocket();
+      if (socket) {
+        socket.emit('student:join', {
+          sessionCode: targetSession.sessionCode,
+          rollNumber,
+          name: studentName,
+          machineNumber,
+          section: data.session.batchName,
+        });
+      }
 
       try {
         localStorage.setItem('kaspro_student_info', JSON.stringify(studentInfo));

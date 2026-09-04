@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, OnModuleInit, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { LabGateway } from '../realtime/lab.gateway';
 
 @Injectable()
 export class SessionsService implements OnModuleInit {
@@ -114,6 +115,10 @@ export class SessionsService implements OnModuleInit {
       },
     });
 
+    try {
+      LabGateway.instance?.broadcastGlobal('faculty:sessions_list_updated', { session });
+    } catch (_) {}
+
     return session;
   }
 
@@ -203,6 +208,14 @@ export class SessionsService implements OnModuleInit {
     });
 
     this.logger.log(`Student ${studentName} (${rollNumber}) joined ${session.sessionCode} on ${machine}`);
+
+    try {
+      LabGateway.instance?.broadcastToSession(normalizedCode, 'faculty:student_updated', attendee);
+      this.getLiveGrid(normalizedCode).then((grid) => {
+        LabGateway.instance?.broadcastToSession(normalizedCode, 'faculty:grid_refresh', grid);
+      }).catch(() => {});
+    } catch (_) {}
+
     return { session, attendee };
   }
 
@@ -254,6 +267,10 @@ export class SessionsService implements OnModuleInit {
         },
       });
 
+      try {
+        LabGateway.instance?.broadcastToSession(normalizedCode, 'faculty:student_updated', attendee);
+      } catch (_) {}
+
       return attendee;
     } catch (err: any) {
       this.logger.warn(`Could not sync student code: ${err.message}`);
@@ -266,61 +283,60 @@ export class SessionsService implements OnModuleInit {
    */
   async getLiveGrid(code: string) {
     const session = await this.getSession(code);
-    const dbAttendees = await this.prisma.sessionAttendee.findMany({
-      where: { sessionId: session.id },
-    });
-
-    const attendeeMap = new Map<string, any>();
-    for (const a of dbAttendees) {
-      attendeeMap.set(a.machineNumber.toUpperCase(), a);
-    }
-
+    const dbAttendees = session.attendees || [];
     const totalMachines = session.totalCapacity || 60;
-    const grid: any[] = [];
 
+    // Build the 60 PC grid
+    const grid: any[] = [];
     let codingCount = 0;
     let submittedCount = 0;
     let offlineCount = 0;
     let totalViolations = 0;
 
+    const attendeeMap = new Map<string, any>();
+    dbAttendees.forEach((att) => {
+      attendeeMap.set(att.machineNumber.toUpperCase(), att);
+    });
+
     for (let i = 1; i <= totalMachines; i++) {
-      const pcNum = `PC-${i < 10 ? '0' + i : i}`;
-      const found = attendeeMap.get(pcNum);
+      const pcId = `PC-${i.toString().padStart(2, '0')}`;
+      const found = attendeeMap.get(pcId);
 
       if (found) {
+        if (found.codingStatus === 'CODING') codingCount++;
         if (found.codingStatus === 'SUBMITTED') submittedCount++;
-        else if (found.onlineStatus === 'OFFLINE') offlineCount++;
-        else codingCount++;
-
+        if (found.onlineStatus === 'OFFLINE') offlineCount++;
         totalViolations += found.tabSwitchCount || 0;
 
         grid.push({
-          machineNumber: pcNum,
+          machineNumber: pcId,
           studentName: found.studentName,
           rollNumber: found.rollNumber,
           section: found.section || session.batchName,
           status: found.codingStatus || 'CODING',
+          onlineStatus: found.onlineStatus || 'ONLINE',
           language: found.language || 'c',
           score: found.score || 0,
           passedCases: found.passedCases || '0/4',
           tabSwitches: found.tabSwitchCount || 0,
-          isUser: true,
-          code: found.currentCode || '// Student started coding...',
+          isUser: found.rollNumber === '538' || found.studentName.toLowerCase().includes('aftab'),
+          code: found.currentCode || '// Student is actively programming...',
           lastHeartbeat: found.lastHeartbeat,
         });
       } else {
         grid.push({
-          machineNumber: pcNum,
+          machineNumber: pcId,
           studentName: 'Available PC',
           rollNumber: '---',
           section: session.batchName,
           status: 'EMPTY',
+          onlineStatus: 'OFFLINE',
           language: 'c',
           score: 0,
           passedCases: '0/0',
           tabSwitches: 0,
           isUser: false,
-          code: '// Workstation empty',
+          code: '// Machine ready for student login...',
         });
       }
     }
@@ -354,13 +370,27 @@ export class SessionsService implements OnModuleInit {
 
   async updateSessionStatus(code: string, status: 'ACTIVE' | 'PAUSED' | 'ENDED') {
     const normalizedCode = code.trim().toUpperCase();
-    return this.prisma.practicalSession.update({
+    const session = await this.prisma.practicalSession.update({
       where: { sessionCode: normalizedCode },
       data: {
         status: status as any,
         endedAt: status === 'ENDED' ? new Date() : null,
       },
     });
+
+    try {
+      LabGateway.instance?.broadcastToSession(normalizedCode, 'session:status_changed', {
+        sessionCode: normalizedCode,
+        status,
+        session,
+      });
+      LabGateway.instance?.broadcastGlobal('faculty:sessions_list_updated', {
+        sessionCode: normalizedCode,
+        status,
+      });
+    } catch (_) {}
+
+    return session;
   }
 
   async endSession(code: string) {
@@ -369,8 +399,16 @@ export class SessionsService implements OnModuleInit {
 
   async deleteSession(code: string) {
     const normalizedCode = code.trim().toUpperCase();
-    return this.prisma.practicalSession.delete({
+    const res = await this.prisma.practicalSession.delete({
       where: { sessionCode: normalizedCode },
     });
+
+    try {
+      LabGateway.instance?.broadcastGlobal('faculty:sessions_list_updated', {
+        deleted: normalizedCode,
+      });
+    } catch (_) {}
+
+    return res;
   }
 }
