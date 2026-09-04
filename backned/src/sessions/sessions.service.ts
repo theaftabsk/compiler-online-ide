@@ -1,246 +1,313 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-
-export interface TestCase {
-  id: string;
-  inputData: string;
-  expectedOutput: string;
-  isHidden?: boolean;
-}
-
-export interface LabQuestion {
-  id: string;
-  title: string;
-  description: string;
-  allowedLanguages: string[];
-  starterCode: Record<string, string>;
-  testCases: TestCase[];
-}
-
-export interface PracticalSession {
-  id: string;
-  institution: string;
-  department: string;
-  section: string;
-  semester: string;
-  subject: string;
-  labRoom: string;
-  facultyName: string;
-  sessionCode: string;
-  status: 'ACTIVE' | 'PAUSED' | 'ENDED';
-  totalCapacity: number;
-  createdAt: string;
-  endedAt?: string;
-  questions: LabQuestion[];
-}
-
-export interface SessionAttendee {
-  rollNumber: string;
-  name: string;
-  section: string;
-  machineNumber: string;
-  onlineStatus: 'ONLINE' | 'IDLE' | 'OFFLINE';
-  codingStatus: 'CODING' | 'SUBMITTED' | 'OFFLINE';
-  language: string;
-  score: number;
-  passedCases: string;
-  submitted: boolean;
-  tabSwitches: number;
-  lastHeartbeat: string;
-  currentCode: string;
-}
+import { Injectable, NotFoundException, ForbiddenException, OnModuleInit, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
-export class SessionsService {
-  private sessions = new Map<string, PracticalSession>();
-  private attendees = new Map<string, Map<string, SessionAttendee>>();
+export class SessionsService implements OnModuleInit {
+  private readonly logger = new Logger(SessionsService.name);
 
-  constructor() {
-    this.seedDefaultBrainwareSession();
+  constructor(private prisma: PrismaService) {}
+
+  async onModuleInit() {
+    await this.seedDefaultSession();
   }
 
-  private seedDefaultBrainwareSession() {
-    const DEFAULT_CODE = 'BW-AIML-J-26X91';
+  /**
+   * Seed default LAB-2026 session into PostgreSQL if not exists
+   */
+  async seedDefaultSession() {
+    try {
+      const existing = await this.prisma.practicalSession.findUnique({
+        where: { sessionCode: 'LAB-2026' },
+      });
 
-    const defaultSession: PracticalSession = {
-      id: 'sess-bw-aiml-j-2026',
-      institution: 'Brainware University',
-      department: 'Artificial Intelligence & Machine Learning (AI & ML)',
-      section: 'Section J',
-      semester: '3rd Semester',
-      subject: 'Programming in C',
-      labRoom: 'Lab 204',
-      facultyName: 'Dr. S. Mukherjee',
-      sessionCode: DEFAULT_CODE,
-      status: 'ACTIVE',
-      totalCapacity: 60,
-      createdAt: new Date().toISOString(),
-      questions: [
-        {
-          id: 'q-101',
-          title: 'Check Positive, Negative, or Zero',
-          description: 'Write a program in C that takes an integer as input and checks whether the number is positive, negative, or zero.',
-          allowedLanguages: ['c', 'cpp', 'java', 'python'],
-          starterCode: {
-            c: '#include <stdio.h>\n\nint main() {\n    int num;\n    scanf("%d", &num);\n    if (num > 0) printf("Positive\\n");\n    else if (num < 0) printf("Negative\\n");\n    else printf("Zero\\n");\n    return 0;\n}',
-            python: 'num = int(input())\nif num > 0: print("Positive")\nelif num < 0: print("Negative")\nelse: print("Zero")',
+      if (!existing) {
+        await this.prisma.practicalSession.create({
+          data: {
+            sessionCode: 'LAB-2026',
+            sessionPassword: '8899',
+            subjectName: 'Data Structures & Algorithms in C',
+            department: 'Computer Science & AI',
+            sectionName: 'Section J',
+            batchName: 'Section J - Batch 2026',
+            facultyName: 'Prof. Aftab Sk',
+            labRoomName: 'Lab 204',
+            totalCapacity: 60,
+            questionTitle: 'Check Even or Odd',
+            questionDescription: 'Write a program in C that takes an integer from standard input and determines whether it is Even or Odd.',
+            status: 'ACTIVE',
           },
-          testCases: [
-            { id: 'tc-1', inputData: '10', expectedOutput: 'Positive', isHidden: false },
-            { id: 'tc-2', inputData: '-5', expectedOutput: 'Negative', isHidden: false },
-            { id: 'tc-3', inputData: '0', expectedOutput: 'Zero', isHidden: false },
-          ],
-        },
-      ],
-    };
+        });
+        this.logger.log('Default LAB-2026 session seeded into PostgreSQL');
+      }
+    } catch (err: any) {
+      this.logger.warn(`Could not seed default session: ${err.message}`);
+    }
+  }
 
-    this.sessions.set(DEFAULT_CODE, defaultSession);
+  /**
+   * Create a practical session in PostgreSQL
+   */
+  async createSession(payload: any) {
+    const randomCode = payload.sessionCode || `LAB-${Math.floor(1000 + Math.random() * 9000)}`;
+    const randomPass = payload.sessionPassword || `${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // Seed Attendees
-    const attendeesMap = new Map<string, SessionAttendee>();
-
-    // Seed Aftab Sk (Roll 538, Section J, PC-14)
-    attendeesMap.set('538', {
-      rollNumber: '538',
-      name: 'Aftab Sk',
-      section: 'Section J',
-      machineNumber: 'PC-14',
-      onlineStatus: 'ONLINE',
-      codingStatus: 'CODING',
-      language: 'c',
-      score: 100,
-      passedCases: '3/3',
-      submitted: true,
-      tabSwitches: 0,
-      lastHeartbeat: new Date().toISOString(),
-      currentCode: defaultSession.questions[0].starterCode.c,
+    const session = await this.prisma.practicalSession.create({
+      data: {
+        sessionCode: randomCode.toUpperCase(),
+        sessionPassword: randomPass,
+        subjectName: payload.subjectName || 'Programming Lab',
+        department: payload.department || 'Computer Science & Engineering',
+        sectionName: payload.sectionName || 'Section A',
+        batchName: payload.batchName || 'Batch 2026',
+        facultyName: payload.facultyName || 'Faculty Incharge',
+        labRoomName: payload.labRoomName || 'Lab 101',
+        totalCapacity: payload.totalCapacity || 60,
+        questionTitle: payload.questionTitle || 'Lab Practical Assignment',
+        questionDescription: payload.questionDescription || 'Solve the given problem.',
+        status: 'ACTIVE',
+      },
     });
 
-    // Seed Simulated Classmates
-    const sampleNames = [
-      'Rohan Das', 'Priya Sharma', 'Sneha Roy', 'Sourav Sen', 'Ananya Paul',
-      'Debanjan Bose', 'Rahul Gupta', 'Suman Roy', 'Tania Ghosh', 'Arpan Mondal',
-      'Ritika Dey', 'Subham Banerjee', 'Pooja Dutta', 'Kunal Mukherjee', 'Sayan Das'
-    ];
-
-    for (let i = 1; i <= 35; i++) {
-      const pcNum = `PC-${i < 10 ? '0' + i : i}`;
-      if (pcNum === 'PC-14') continue;
-
-      const roll = (500 + i).toString();
-      const name = sampleNames[i % sampleNames.length] + ` (${roll})`;
-      const isSub = i % 3 === 0;
-      const isOnline = i % 8 !== 0;
-
-      attendeesMap.set(roll, {
-        rollNumber: roll,
-        name: name,
-        section: 'Section J',
-        machineNumber: pcNum,
-        onlineStatus: isOnline ? 'ONLINE' : 'OFFLINE',
-        codingStatus: isSub ? 'SUBMITTED' : (isOnline ? 'CODING' : 'OFFLINE'),
-        language: 'c',
-        score: isSub ? 100 : (i % 2 === 0 ? 66 : 0),
-        passedCases: isSub ? '3/3' : (i % 2 === 0 ? '2/3' : '0/3'),
-        submitted: isSub,
-        tabSwitches: i % 5 === 0 ? 2 : 0,
-        lastHeartbeat: new Date().toISOString(),
-        currentCode: `// ${name} working on ${pcNum}\n#include <stdio.h>\nint main() { return 0; }`,
-      });
-    }
-
-    this.attendees.set(DEFAULT_CODE, attendeesMap);
-  }
-
-  createSession(payload: any) {
-    const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
-    const deptCode = (payload.department || 'AIML').replace(/[^A-Z]/g, '').slice(0, 4) || 'AIML';
-    const secCode = (payload.section || 'J').replace(/[^A-Z0-9]/g, '').slice(-1) || 'J';
-    const sessionCode = `BW-${deptCode}-${secCode}-${randomSuffix}`;
-
-    const newSession: PracticalSession = {
-      id: 'sess-' + Date.now(),
-      institution: payload.institution || 'Brainware University',
-      department: payload.department || 'AI & ML',
-      section: payload.section || 'Section J',
-      semester: payload.semester || '3rd Semester',
-      subject: payload.subject || 'Programming in C',
-      labRoom: payload.labRoom || 'Lab 204',
-      facultyName: payload.facultyName || 'Faculty',
-      sessionCode,
-      status: 'ACTIVE',
-      totalCapacity: 60,
-      createdAt: new Date().toISOString(),
-      questions: payload.questions || [],
-    };
-
-    this.sessions.set(sessionCode, newSession);
-    this.attendees.set(sessionCode, new Map());
-    return newSession;
-  }
-
-  getSession(code: string): PracticalSession {
-    const session = this.sessions.get(code);
-    if (!session) throw new NotFoundException('Session code not found');
     return session;
   }
 
-  joinSession(payload: { sessionCode: string; rollNumber: string; name: string; machineNumber: string; section?: string }) {
-    const session = this.getSession(payload.sessionCode);
-    if (session.status === 'ENDED') throw new ForbiddenException('Practical session has ended');
+  /**
+   * Get session by code from PostgreSQL
+   */
+  async getSession(code: string) {
+    const normalizedCode = code.trim().toUpperCase();
+    const session = await this.prisma.practicalSession.findUnique({
+      where: { sessionCode: normalizedCode },
+      include: {
+        attendees: {
+          orderBy: { machineNumber: 'asc' },
+        },
+      },
+    });
 
-    let sessionAttendees = this.attendees.get(payload.sessionCode);
-    if (!sessionAttendees) {
-      sessionAttendees = new Map();
-      this.attendees.set(payload.sessionCode, sessionAttendees);
+    if (!session) {
+      throw new NotFoundException(`Session ${normalizedCode} not found in database.`);
     }
 
-    const attendee: SessionAttendee = {
-      rollNumber: payload.rollNumber || '538',
-      name: payload.name || `Student ${payload.rollNumber}`,
-      section: payload.section || session.section,
-      machineNumber: payload.machineNumber || 'PC-01',
-      onlineStatus: 'ONLINE',
-      codingStatus: 'CODING',
-      language: 'c',
-      score: 0,
-      passedCases: '0/3',
-      submitted: false,
-      tabSwitches: 0,
-      lastHeartbeat: new Date().toISOString(),
-      currentCode: session.questions[0]?.starterCode?.c || '',
-    };
+    return session;
+  }
 
-    sessionAttendees.set(payload.rollNumber, attendee);
+  /**
+   * Student joins a session - saves into PostgreSQL
+   */
+  async joinSession(payload: {
+    sessionCode: string;
+    machineNumber: string;
+    name?: string;
+    rollNumber?: string;
+    section?: string;
+    password?: string;
+  }) {
+    const normalizedCode = payload.sessionCode.trim().toUpperCase();
+    const session = await this.prisma.practicalSession.findUnique({
+      where: { sessionCode: normalizedCode },
+    });
+
+    if (!session) {
+      throw new NotFoundException(`Session ${normalizedCode} not found.`);
+    }
+
+    if (session.status === 'ENDED') {
+      throw new ForbiddenException('This practical lab session has ended.');
+    }
+
+    const machine = payload.machineNumber ? payload.machineNumber.toUpperCase() : 'PC-01';
+    const studentName = payload.name && payload.name.trim() ? payload.name.trim() : 'Aftab Sk';
+    const rollNumber = payload.rollNumber && payload.rollNumber.trim() ? payload.rollNumber.trim() : '538';
+
+    // Upsert into PostgreSQL
+    const attendee = await this.prisma.sessionAttendee.upsert({
+      where: {
+        sessionId_machineNumber: {
+          sessionId: session.id,
+          machineNumber: machine,
+        },
+      },
+      update: {
+        studentName,
+        rollNumber,
+        section: payload.section || session.batchName,
+        codingStatus: 'CODING',
+        onlineStatus: 'ONLINE',
+        lastHeartbeat: new Date(),
+      },
+      create: {
+        sessionId: session.id,
+        machineNumber: machine,
+        studentName,
+        rollNumber,
+        section: payload.section || session.batchName,
+        codingStatus: 'CODING',
+        onlineStatus: 'ONLINE',
+        language: 'c',
+        score: 0,
+        passedCases: '0/4',
+      },
+    });
+
+    this.logger.log(`Student ${studentName} (${rollNumber}) joined ${session.sessionCode} on ${machine}`);
     return { session, attendee };
   }
 
-  getLiveGrid(code: string) {
-    const session = this.getSession(code);
-    const sessionAttendees = this.attendees.get(code) || new Map();
-    const list = Array.from(sessionAttendees.values());
+  /**
+   * Sync student code & heartbeat in PostgreSQL
+   */
+  async syncCode(payload: {
+    sessionCode: string;
+    machineNumber: string;
+    code?: string;
+    tabSwitches?: number;
+    submitted?: boolean;
+    score?: number;
+  }) {
+    const normalizedCode = payload.sessionCode.trim().toUpperCase();
+    const session = await this.prisma.practicalSession.findUnique({
+      where: { sessionCode: normalizedCode },
+    });
+
+    if (!session) return null;
+
+    const machine = payload.machineNumber.toUpperCase();
+
+    try {
+      const attendee = await this.prisma.sessionAttendee.upsert({
+        where: {
+          sessionId_machineNumber: {
+            sessionId: session.id,
+            machineNumber: machine,
+          },
+        },
+        update: {
+          ...(payload.code !== undefined ? { currentCode: payload.code } : {}),
+          ...(payload.tabSwitches !== undefined ? { tabSwitchCount: payload.tabSwitches } : {}),
+          ...(payload.submitted ? { codingStatus: 'SUBMITTED', score: payload.score || 100, passedCases: '4/4' } : {}),
+          lastHeartbeat: new Date(),
+          onlineStatus: 'ONLINE',
+        },
+        create: {
+          sessionId: session.id,
+          machineNumber: machine,
+          studentName: 'Aftab Sk',
+          rollNumber: '538',
+          currentCode: payload.code || '',
+          codingStatus: payload.submitted ? 'SUBMITTED' : 'CODING',
+          onlineStatus: 'ONLINE',
+          tabSwitchCount: payload.tabSwitches || 0,
+          score: payload.score || 0,
+        },
+      });
+
+      return attendee;
+    } catch (err: any) {
+      this.logger.warn(`Could not sync student code: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get full real-time 60 PC grid from PostgreSQL
+   */
+  async getLiveGrid(code: string) {
+    const session = await this.getSession(code);
+    const dbAttendees = await this.prisma.sessionAttendee.findMany({
+      where: { sessionId: session.id },
+    });
+
+    const attendeeMap = new Map<string, any>();
+    for (const a of dbAttendees) {
+      attendeeMap.set(a.machineNumber.toUpperCase(), a);
+    }
+
+    const totalMachines = session.totalCapacity || 60;
+    const grid: any[] = [];
+
+    let codingCount = 0;
+    let submittedCount = 0;
+    let offlineCount = 0;
+    let totalViolations = 0;
+
+    for (let i = 1; i <= totalMachines; i++) {
+      const pcNum = `PC-${i < 10 ? '0' + i : i}`;
+      const found = attendeeMap.get(pcNum);
+
+      if (found) {
+        if (found.codingStatus === 'SUBMITTED') submittedCount++;
+        else if (found.onlineStatus === 'OFFLINE') offlineCount++;
+        else codingCount++;
+
+        totalViolations += found.tabSwitchCount || 0;
+
+        grid.push({
+          machineNumber: pcNum,
+          studentName: found.studentName,
+          rollNumber: found.rollNumber,
+          section: found.section || session.batchName,
+          status: found.codingStatus || 'CODING',
+          language: found.language || 'c',
+          score: found.score || 0,
+          passedCases: found.passedCases || '0/4',
+          tabSwitches: found.tabSwitchCount || 0,
+          isUser: true,
+          code: found.currentCode || '// Student started coding...',
+          lastHeartbeat: found.lastHeartbeat,
+        });
+      } else {
+        grid.push({
+          machineNumber: pcNum,
+          studentName: 'Available PC',
+          rollNumber: '---',
+          section: session.batchName,
+          status: 'EMPTY',
+          language: 'c',
+          score: 0,
+          passedCases: '0/0',
+          tabSwitches: 0,
+          isUser: false,
+          code: '// Workstation empty',
+        });
+      }
+    }
 
     return {
-      session,
-      stats: {
+      session: {
+        id: session.id,
+        sessionCode: session.sessionCode,
+        sessionPassword: session.sessionPassword,
+        subjectName: session.subjectName,
+        department: session.department,
+        batchName: session.batchName,
+        facultyName: session.facultyName,
+        labRoomName: session.labRoomName,
+        questionTitle: session.questionTitle,
+        questionDescription: session.questionDescription,
+        status: session.status,
         totalCapacity: session.totalCapacity,
-        joinedStudents: list.length,
-        onlineCount: list.filter(a => a.onlineStatus === 'ONLINE').length,
-        offlineCount: list.filter(a => a.onlineStatus === 'OFFLINE').length,
-        codingCount: list.filter(a => a.codingStatus === 'CODING').length,
-        submittedCount: list.filter(a => a.submitted).length,
       },
-      attendees: list,
+      stats: {
+        totalCapacity: totalMachines,
+        joinedStudents: dbAttendees.length,
+        codingCount,
+        submittedCount,
+        offlineCount,
+        totalViolations,
+      },
+      attendees: grid,
     };
   }
 
-  endSession(code: string) {
-    const session = this.getSession(code);
-    session.status = 'ENDED';
-    session.endedAt = new Date().toISOString();
-    return session;
-  }
-
-  getAttendeesMap() {
-    return this.attendees;
+  async endSession(code: string) {
+    const normalizedCode = code.trim().toUpperCase();
+    return this.prisma.practicalSession.update({
+      where: { sessionCode: normalizedCode },
+      data: {
+        status: 'ENDED',
+        endedAt: new Date(),
+      },
+    });
   }
 }

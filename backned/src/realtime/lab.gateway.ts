@@ -34,93 +34,100 @@ export class LabGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('student:join')
-  handleStudentJoin(
+  async handleStudentJoin(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { sessionCode: string; rollNumber: string; name: string; machineNumber: string; section?: string },
   ) {
-    const { sessionCode, rollNumber } = payload;
+    const { sessionCode } = payload;
     client.join(sessionCode);
 
-    const attendeesMap = this.sessionsService.getAttendeesMap().get(sessionCode);
-    if (attendeesMap && rollNumber) {
-      const student = attendeesMap.get(rollNumber);
-      if (student) {
-        student.onlineStatus = 'ONLINE';
-        student.lastHeartbeat = new Date().toISOString();
-        this.server.to(sessionCode).emit('faculty:student_updated', student);
-        this.server.to(sessionCode).emit('faculty:grid_refresh', Array.from(attendeesMap.values()));
-      }
+    try {
+      const result = await this.sessionsService.joinSession(payload);
+      this.server.to(sessionCode).emit('faculty:student_updated', result.attendee);
+      const grid = await this.sessionsService.getLiveGrid(sessionCode);
+      this.server.to(sessionCode).emit('faculty:grid_refresh', grid.attendees);
+    } catch (err: any) {
+      this.logger.warn(`Error in student:join: ${err.message}`);
     }
   }
 
   @SubscribeMessage('faculty:join')
-  handleFacultyJoin(
+  async handleFacultyJoin(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { sessionCode: string },
   ) {
     client.join(payload.sessionCode);
-    const attendeesMap = this.sessionsService.getAttendeesMap().get(payload.sessionCode);
-    if (attendeesMap) {
-      client.emit('faculty:grid_refresh', Array.from(attendeesMap.values()));
+    try {
+      const grid = await this.sessionsService.getLiveGrid(payload.sessionCode);
+      client.emit('faculty:grid_refresh', grid.attendees);
+    } catch (err: any) {
+      this.logger.warn(`Error in faculty:join: ${err.message}`);
     }
   }
 
   @SubscribeMessage('student:code_stream')
-  handleCodeStream(
-    @MessageBody() payload: { sessionCode: string; rollNumber: string; code: string; language: string },
+  async handleCodeStream(
+    @MessageBody() payload: { sessionCode: string; rollNumber?: string; machineNumber: string; code: string; language: string },
   ) {
-    const { sessionCode, rollNumber, code, language } = payload;
-    const attendeesMap = this.sessionsService.getAttendeesMap().get(sessionCode);
-    if (attendeesMap && attendeesMap.has(rollNumber)) {
-      const student = attendeesMap.get(rollNumber)!;
-      student.currentCode = code;
-      student.language = language;
-      student.codingStatus = 'CODING';
+    const { sessionCode, machineNumber, code, language, rollNumber } = payload;
+    try {
+      await this.sessionsService.syncCode({
+        sessionCode,
+        machineNumber,
+        code,
+      });
 
       // Stream to faculty inspecting this student
-      this.server.to(sessionCode).emit('faculty:student_code_sync', { rollNumber, code, language });
+      this.server.to(sessionCode).emit('faculty:student_code_sync', { rollNumber, machineNumber, code, language });
+    } catch (err: any) {
+      this.logger.warn(`Error in student:code_stream: ${err.message}`);
     }
   }
 
   @SubscribeMessage('student:tab_switched')
-  handleTabSwitch(
-    @MessageBody() payload: { sessionCode: string; rollNumber: string },
+  async handleTabSwitch(
+    @MessageBody() payload: { sessionCode: string; machineNumber: string; rollNumber?: string; studentName?: string; count?: number },
   ) {
-    const { sessionCode, rollNumber } = payload;
-    const attendeesMap = this.sessionsService.getAttendeesMap().get(sessionCode);
-    if (attendeesMap && attendeesMap.has(rollNumber)) {
-      const student = attendeesMap.get(rollNumber)!;
-      student.tabSwitches = (student.tabSwitches || 0) + 1;
+    const { sessionCode, machineNumber, rollNumber, studentName, count } = payload;
+    try {
+      await this.sessionsService.syncCode({
+        sessionCode,
+        machineNumber,
+        tabSwitches: count || 1,
+      });
 
       // Broadcast anti-cheating warning to faculty
       this.server.to(sessionCode).emit('faculty:student_alert', {
         type: 'TAB_SWITCH',
-        rollNumber,
-        studentName: student.name,
-        machineNumber: student.machineNumber,
-        count: student.tabSwitches,
-        message: `Security Flag: Student ${student.name} (${student.machineNumber}) lost focus / switched tabs (${student.tabSwitches} times).`,
+        rollNumber: rollNumber || '538',
+        studentName: studentName || 'Student',
+        machineNumber,
+        count: count || 1,
+        message: `Security Flag: Student on ${machineNumber} lost focus / switched tabs.`,
       });
-
-      this.server.to(sessionCode).emit('faculty:student_updated', student);
+    } catch (err: any) {
+      this.logger.warn(`Error in student:tab_switched: ${err.message}`);
     }
   }
 
   @SubscribeMessage('student:submitted')
-  handleStudentSubmission(
-    @MessageBody() payload: { sessionCode: string; rollNumber: string; score: number; passedCases: string },
+  async handleStudentSubmission(
+    @MessageBody() payload: { sessionCode: string; machineNumber: string; score: number; passedCases: string },
   ) {
-    const { sessionCode, rollNumber, score, passedCases } = payload;
-    const attendeesMap = this.sessionsService.getAttendeesMap().get(sessionCode);
-    if (attendeesMap && attendeesMap.has(rollNumber)) {
-      const student = attendeesMap.get(rollNumber)!;
-      student.submitted = true;
-      student.codingStatus = 'SUBMITTED';
-      student.score = score;
-      student.passedCases = passedCases;
+    const { sessionCode, machineNumber, score } = payload;
+    try {
+      const attendee = await this.sessionsService.syncCode({
+        sessionCode,
+        machineNumber,
+        submitted: true,
+        score,
+      });
 
-      this.server.to(sessionCode).emit('faculty:student_submitted', student);
-      this.server.to(sessionCode).emit('faculty:grid_refresh', Array.from(attendeesMap.values()));
+      this.server.to(sessionCode).emit('faculty:student_submitted', attendee);
+      const grid = await this.sessionsService.getLiveGrid(sessionCode);
+      this.server.to(sessionCode).emit('faculty:grid_refresh', grid.attendees);
+    } catch (err: any) {
+      this.logger.warn(`Error in student:submitted: ${err.message}`);
     }
   }
 }

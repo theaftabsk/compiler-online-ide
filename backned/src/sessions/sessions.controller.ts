@@ -6,28 +6,38 @@ export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
 
   @Post('create')
-  create(@Body() payload: any) {
-    return { success: true, session: this.sessionsService.createSession(payload) };
+  async create(@Body() payload: any) {
+    const session = await this.sessionsService.createSession(payload);
+    return { success: true, session };
   }
 
   @Get(':code')
-  findOne(@Param('code') code: string) {
-    return { success: true, session: this.sessionsService.getSession(code) };
+  async findOne(@Param('code') code: string) {
+    const session = await this.sessionsService.getSession(code);
+    return { success: true, session };
   }
 
   @Post('join')
-  join(@Body() payload: any) {
-    const result = this.sessionsService.joinSession(payload);
+  async join(@Body() payload: any) {
+    const result = await this.sessionsService.joinSession(payload);
     return { success: true, ...result };
   }
 
+  @Post('heartbeat')
+  async syncCode(@Body() payload: any) {
+    const result = await this.sessionsService.syncCode(payload);
+    return { success: true, attendee: result };
+  }
+
   @Get(':code/grid')
-  getGrid(@Param('code') code: string) {
-    return { success: true, ...this.sessionsService.getLiveGrid(code) };
+  async getGrid(@Param('code') code: string) {
+    const gridData = await this.sessionsService.getLiveGrid(code);
+    return { success: true, ...gridData };
   }
 
   @Post(':code/end')
-  end(@Param('code') code: string) {
-    return { success: true, session: this.sessionsService.endSession(code) };
+  async end(@Param('code') code: string) {
+    const session = await this.sessionsService.endSession(code);
+    return { success: true, session };
   }
 }

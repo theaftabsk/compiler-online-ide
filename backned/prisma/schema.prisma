@@ -164,15 +164,21 @@ model PracticalSession {
   labRoom       LabRoom?           @relation(fields: [labRoomId], references: [id])
   
   institutionName String?          // e.g. "Brainware University"
-  department      String?          // e.g. "AI & ML"
+  department      String?          // e.g. "Computer Science & AI"
   sectionName     String?          // e.g. "Section J"
-  batchName       String?          // e.g. "Batch 2026"
+  batchName       String?          // e.g. "Section J - Batch 2026"
   labRoomName     String?          // e.g. "Lab 204"
   facultyName     String?          // e.g. "Prof. Aftab Sk"
   
-  subjectName   String             // e.g. "Programming in C"
-  sessionCode   String             @unique // e.g. "BW-AIML-J-26X91"
-  status        SessionStatus      @default(ACTIVE)
+  subjectName     String           // e.g. "Data Structures & Algorithms in C"
+  sessionCode     String           @unique // e.g. "LAB-2026"
+  sessionPassword String           @default("8899")
+  status          SessionStatus    @default(ACTIVE)
+  totalCapacity   Int              @default(60)
+  
+  questionTitle       String?      @default("Check Even or Odd")
+  questionDescription String?      @db.Text
+  
   startedAt     DateTime           @default(now())
   endedAt       DateTime?
 
@@ -211,17 +217,24 @@ model SessionAttendee {
   id              String            @id @default(uuid())
   sessionId       String
   session         PracticalSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  studentId       String
-  student         User              @relation(fields: [studentId], references: [id])
+  studentId       String?
+  student         User?             @relation(fields: [studentId], references: [id])
+  studentName     String            @default("Student")
+  rollNumber      String            @default("001")
+  section         String?           @default("Section J")
   machineNumber   String            // e.g. "PC-14"
   ipAddress       String?
   onlineStatus    OnlineStatus      @default(ONLINE)
-  lastHeartbeat   DateTime          @default(now())
+  codingStatus    String            @default("CODING") // CODING, SUBMITTED, OFFLINE
+  language        String            @default("c")
+  score           Int               @default(0)
+  passedCases     String            @default("0/4")
   currentCode     String?           @db.Text
   tabSwitchCount  Int               @default(0)
+  lastHeartbeat   DateTime          @default(now())
   joinedAt        DateTime          @default(now())
 
-  @@unique([sessionId, studentId])
+  @@unique([sessionId, machineNumber])
 }
 
 model Submission {
