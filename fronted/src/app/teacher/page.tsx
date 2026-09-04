@@ -18,20 +18,22 @@ import {
   Code2, 
   Radio, 
   ExternalLink,
-  PieChart
+  PieChart,
+  Loader2,
+  ShieldCheck
 } from 'lucide-react';
 import { IDEProvider, useIDE } from '@/context/IDEContext';
+import { useTeacherAuth } from '@/context/TeacherAuthContext';
 import CodeInspectorModal from '@/components/CodeInspectorModal';
 
 function TeacherDashboardInner() {
   const router = useRouter();
+  const { teacher, isAuthenticated, isLoading, logout } = useTeacherAuth();
   const { 
     theme, 
     toggleTheme, 
     sessionsList, 
-    isTeacherLoggedIn, 
     handleTeacherLogout,
-    teacherEmail,
     attendees,
     inspectedAttendee,
     setInspectedAttendee
@@ -42,12 +44,21 @@ function TeacherDashboardInner() {
 
   // If not logged in, redirect to dedicated login page
   useEffect(() => {
-    if (!isTeacherLoggedIn) {
-      router.push('/teacher/login');
+    if (!isLoading && !isAuthenticated) {
+      router.push('/teacher/login?redirect=/teacher');
     }
-  }, [isTeacherLoggedIn, router]);
+  }, [isAuthenticated, isLoading, router]);
 
-  if (!isTeacherLoggedIn) {
+  if (isLoading) {
+    return (
+      <div className={`min-h-screen w-screen flex flex-col items-center justify-center ${isDark ? 'bg-[#181818] text-white' : 'bg-gray-50 text-gray-800'}`}>
+        <Loader2 className="w-8 h-8 animate-spin text-[#0078d4] mb-3" />
+        <p className="text-xs opacity-70 font-mono">Verifying Faculty Authentication...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return null;
   }
 
@@ -57,56 +68,74 @@ function TeacherDashboardInner() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  const onSignOut = () => {
+    logout();
+    handleTeacherLogout();
+    router.push('/teacher/login');
+  };
+
   return (
     <div className={`min-h-screen w-screen flex flex-col select-none overflow-x-hidden ${isDark ? 'bg-[#181818] text-[#cccccc]' : 'bg-[#f8f8f8] text-[#333333]'}`}>
       
       {/* Top Header */}
-      <header className={`h-12 px-6 flex items-center justify-between border-b shrink-0 ${isDark ? 'bg-[#1f1f1f] border-[#2b2b2b]' : 'bg-white border-gray-200'}`}>
+      <header className={`h-14 px-6 flex items-center justify-between border-b shrink-0 ${isDark ? 'bg-[#1f1f1f] border-[#2b2b2b]' : 'bg-white border-gray-200'}`}>
         <div className="flex items-center gap-3">
-          <div className="w-6 h-6 rounded bg-[#0078d4] flex items-center justify-center text-xs text-white font-bold">
-            <Code2 className="w-3.5 h-3.5" />
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#0078d4] to-[#00a2ff] flex items-center justify-center text-xs text-white font-bold shadow-md shadow-[#0078d4]/20">
+            <Code2 className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-xs font-bold tracking-wide">Teacher / Faculty Control Center</h1>
-            <div className="text-[10px] opacity-60">Faculty: {teacherEmail || 'faculty@university.edu'}</div>
+            <h1 className="text-xs font-bold tracking-wide flex items-center gap-1.5">
+              <span>Teacher & Faculty Control Center</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">Verified</span>
+            </h1>
+            <div className="text-[11px] opacity-75 flex items-center gap-1.5 text-[#0078d4] font-medium">
+              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              <span>{teacher?.fullName || 'Faculty Member'}</span>
+              <span className="opacity-40">•</span>
+              <span className="opacity-80">{teacher?.departmentName || 'Computer Science'}</span>
+              <span className="opacity-40">•</span>
+              <span className="opacity-60">{teacher?.institutionName || 'Kaspro Partner'}</span>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
           <Link
             href="/"
-            className="px-3 py-1 text-xs border rounded hover:bg-gray-700/20 transition flex items-center gap-1.5"
+            className="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-700/20 transition flex items-center gap-1.5"
           >
             <ArrowLeft className="w-3 h-3" /> Code Editor
           </Link>
 
           <Link
             href="/teacher/analytics"
-            className="px-3 py-1 text-xs border rounded hover:bg-gray-700/20 transition flex items-center gap-1.5"
+            className="px-3 py-1.5 text-xs border rounded-lg hover:bg-gray-700/20 transition flex items-center gap-1.5"
           >
             <PieChart className="w-3 h-3 text-indigo-400" /> Department Analytics
           </Link>
 
           <Link
             href="/teacher/create"
-            className="px-3 py-1 text-xs bg-[#0078d4] hover:bg-[#006cc1] text-white font-semibold rounded transition flex items-center gap-1.5 shadow"
+            className="px-3 py-1.5 text-xs bg-[#0078d4] hover:bg-[#006cc1] text-white font-semibold rounded-lg transition flex items-center gap-1.5 shadow"
           >
             <Plus className="w-3.5 h-3.5" /> Create New Lab Session
           </Link>
 
           <button
             onClick={toggleTheme}
-            className="p-1.5 rounded hover:bg-gray-700/20"
+            className="p-2 rounded-lg hover:bg-gray-700/20"
+            title="Toggle theme"
           >
             {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-[#0078d4]" />}
           </button>
 
           <button
-            onClick={handleTeacherLogout}
+            onClick={onSignOut}
             title="Sign Out"
-            className="p-1.5 rounded hover:bg-rose-500/20 text-rose-400"
+            className="px-2.5 py-1.5 rounded-lg border border-rose-500/30 hover:bg-rose-500/10 text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Sign Out</span>
           </button>
         </div>
       </header>

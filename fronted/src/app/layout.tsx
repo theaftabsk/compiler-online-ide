@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Outfit, Fira_Code } from 'next/font/google';
+import { TeacherAuthProvider } from '@/context/TeacherAuthContext';
 import './globals.css';
 
 const inter = Inter({
@@ -297,7 +298,9 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-[#1e1e1e] text-[#cccccc] antialiased selection:bg-[#0078d4] selection:text-white">
-        {children}
+        <TeacherAuthProvider>
+          {children}
+        </TeacherAuthProvider>
       </body>
     </html>
   );

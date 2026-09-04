@@ -106,9 +106,12 @@ model LabRoom {
 model User {
   id            String             @id @default(uuid())
   
-  // Optional: NULL if user is an Independent Normal User (No college)
+  // Optional: NULL if user is an Independent Normal User / Self-Registered Faculty
   institutionId String?            
   institution   Institution?       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  institutionName String?          // Direct college/univ name (e.g. "Brainware University")
+  departmentName  String?          // Direct department name (e.g. "AI & ML")
+  designation     String?          @default("Faculty") // e.g. "Assistant Professor"
   
   role          UserRole           @default(INDIVIDUAL_USER)
   fullName      String
@@ -151,14 +154,21 @@ model SavedPlayground {
 // ==========================================
 model PracticalSession {
   id            String             @id @default(uuid())
-  institutionId String
-  institution   Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  facultyId     String
-  faculty       User               @relation("FacultySessions", fields: [facultyId], references: [id])
-  sectionId     String
-  section       Section            @relation(fields: [sectionId], references: [id])
-  labRoomId     String
-  labRoom       LabRoom            @relation(fields: [labRoomId], references: [id])
+  institutionId String?
+  institution   Institution?       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  facultyId     String?
+  faculty       User?              @relation("FacultySessions", fields: [facultyId], references: [id])
+  sectionId     String?
+  section       Section?           @relation(fields: [sectionId], references: [id])
+  labRoomId     String?
+  labRoom       LabRoom?           @relation(fields: [labRoomId], references: [id])
+  
+  institutionName String?          // e.g. "Brainware University"
+  department      String?          // e.g. "AI & ML"
+  sectionName     String?          // e.g. "Section J"
+  batchName       String?          // e.g. "Batch 2026"
+  labRoomName     String?          // e.g. "Lab 204"
+  facultyName     String?          // e.g. "Prof. Aftab Sk"
   
   subjectName   String             // e.g. "Programming in C"
   sessionCode   String             @unique // e.g. "BW-AIML-J-26X91"
