@@ -20,10 +20,9 @@ export default function StudentJoinModal() {
   const [rollNumber, setRollNumber] = useState('538');
   const [machineNumber, setMachineNumber] = useState('PC-14');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!joinSessionModalOpen) return null;
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

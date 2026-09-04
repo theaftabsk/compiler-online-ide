@@ -46,7 +46,6 @@ export default function BottomPanel() {
   const terminalBottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  if (!panelOpen) return null;
   const isDark = theme === 'vs-dark';
 
   const totalCases = activeSession?.testCases?.length || 4;
@@ -179,6 +178,8 @@ export default function BottomPanel() {
   };
 
   const currentHeight = isFullscreen ? 'calc(100vh - 75px)' : `${panelHeight}px`;
+
+  if (!panelOpen) return null;
 
   return (
     <div 
