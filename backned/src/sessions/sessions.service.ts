@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, ForbiddenException, OnModuleInit, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { LabGateway } from '../realtime/lab.gateway';
+
+function getLabGateway(): any {
+  return (global as any).labGateway;
+}
 
 @Injectable()
 export class SessionsService implements OnModuleInit {
@@ -116,7 +119,7 @@ export class SessionsService implements OnModuleInit {
     });
 
     try {
-      LabGateway.instance?.broadcastGlobal('faculty:sessions_list_updated', { session });
+      getLabGateway()?.broadcastGlobal('faculty:sessions_list_updated', { session });
     } catch (_) {}
 
     return session;
@@ -210,9 +213,9 @@ export class SessionsService implements OnModuleInit {
     this.logger.log(`Student ${studentName} (${rollNumber}) joined ${session.sessionCode} on ${machine}`);
 
     try {
-      LabGateway.instance?.broadcastToSession(normalizedCode, 'faculty:student_updated', attendee);
+      getLabGateway()?.broadcastToSession(normalizedCode, 'faculty:student_updated', attendee);
       this.getLiveGrid(normalizedCode).then((grid) => {
-        LabGateway.instance?.broadcastToSession(normalizedCode, 'faculty:grid_refresh', grid);
+        getLabGateway()?.broadcastToSession(normalizedCode, 'faculty:grid_refresh', grid);
       }).catch(() => {});
     } catch (_) {}
 
@@ -268,7 +271,7 @@ export class SessionsService implements OnModuleInit {
       });
 
       try {
-        LabGateway.instance?.broadcastToSession(normalizedCode, 'faculty:student_updated', attendee);
+        getLabGateway()?.broadcastToSession(normalizedCode, 'faculty:student_updated', attendee);
       } catch (_) {}
 
       return attendee;
@@ -379,12 +382,12 @@ export class SessionsService implements OnModuleInit {
     });
 
     try {
-      LabGateway.instance?.broadcastToSession(normalizedCode, 'session:status_changed', {
+      getLabGateway()?.broadcastToSession(normalizedCode, 'session:status_changed', {
         sessionCode: normalizedCode,
         status,
         session,
       });
-      LabGateway.instance?.broadcastGlobal('faculty:sessions_list_updated', {
+      getLabGateway()?.broadcastGlobal('faculty:sessions_list_updated', {
         sessionCode: normalizedCode,
         status,
       });
@@ -404,7 +407,7 @@ export class SessionsService implements OnModuleInit {
     });
 
     try {
-      LabGateway.instance?.broadcastGlobal('faculty:sessions_list_updated', {
+      getLabGateway()?.broadcastGlobal('faculty:sessions_list_updated', {
         deleted: normalizedCode,
       });
     } catch (_) {}

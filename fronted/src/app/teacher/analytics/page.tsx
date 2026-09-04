@@ -32,7 +32,7 @@ function AnalyticsInner() {
 
   // Set default selected session once sessionsList is available
   useEffect(() => {
-    if (sessionsList.length > 0 && !sessionsList.some(s => s.sessionCode === selectedSessionCode)) {
+    if (sessionsList.length > 0 && !sessionsList.some((s: any) => s.sessionCode === selectedSessionCode)) {
       setSelectedSessionCode(sessionsList[0].sessionCode);
     }
   }, [sessionsList, selectedSessionCode]);
@@ -62,20 +62,20 @@ function AnalyticsInner() {
 
   // Derived real metrics from live PostgreSQL data
   const totalCapacity = statsData?.totalCapacity || sessionMeta?.totalCapacity || 60;
-  const activeAttendees = gridAttendees.filter(a => a.status !== 'EMPTY');
-  const codingCount = activeAttendees.filter(a => a.status === 'CODING').length;
-  const submittedList = activeAttendees.filter(a => a.status === 'SUBMITTED');
+  const activeAttendees = gridAttendees.filter((a: AttendeeRow) => a.status !== 'EMPTY');
+  const codingCount = activeAttendees.filter((a: AttendeeRow) => a.status === 'CODING').length;
+  const submittedList = activeAttendees.filter((a: AttendeeRow) => a.status === 'SUBMITTED');
   const submittedCount = submittedList.length;
 
   const attendanceRate = totalCapacity > 0 ? Math.round((activeAttendees.length / totalCapacity) * 100) : 0;
   
   // Real pass rate based on test cases/score >= 50
   const passRate = submittedCount > 0 
-    ? Math.round((submittedList.filter(s => s.score >= 50).length / submittedCount) * 100)
+    ? Math.round((submittedList.filter((s: AttendeeRow) => s.score >= 50).length / submittedCount) * 100)
     : (activeAttendees.length > 0 ? 0 : 100);
 
   // Real integrity score: percentage of students with 0 tab switch violations
-  const cleanIntegrityCount = activeAttendees.filter(a => (a.tabSwitches || 0) === 0).length;
+  const cleanIntegrityCount = activeAttendees.filter((a: AttendeeRow) => (a.tabSwitches || 0) === 0).length;
   const integrityScore = activeAttendees.length > 0 
     ? Math.round((cleanIntegrityCount / activeAttendees.length) * 100) 
     : 100;
@@ -107,7 +107,7 @@ function AnalyticsInner() {
             onChange={(e) => setSelectedSessionCode(e.target.value)}
             className={`text-xs px-2.5 py-1 rounded border font-mono font-semibold focus:outline-none focus:border-[#0078d4] ${isDark ? 'bg-[#141414] border-[#333] text-white' : 'bg-white border-gray-300'}`}
           >
-            {sessionsList.map(s => (
+            {sessionsList.map((s: any) => (
               <option key={s.sessionCode} value={s.sessionCode}>
                 {s.sessionCode} &bull; {s.subjectName.slice(0, 24)}...
               </option>
@@ -213,7 +213,7 @@ function AnalyticsInner() {
                     </td>
                   </tr>
                 ) : (
-                  activeAttendees.map((s) => (
+                  activeAttendees.map((s: AttendeeRow) => (
                     <tr key={s.machineNumber} className={`hover:bg-gray-700/10 ${s.isUser ? 'font-bold text-cyan-400' : ''}`}>
                       <td className="py-2.5 px-3 font-bold">{s.machineNumber}</td>
                       <td className="py-2.5 px-3 font-sans font-medium">{s.studentName}</td>

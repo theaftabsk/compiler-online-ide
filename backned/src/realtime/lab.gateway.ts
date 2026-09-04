@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { SessionsService } from '../sessions/sessions.service';
 
 @WebSocketGateway({
@@ -24,8 +25,13 @@ export class LabGateway implements OnGatewayConnection, OnGatewayDisconnect {
   public static instance: LabGateway | null = null;
   private readonly logger = new Logger(LabGateway.name);
 
-  constructor(private readonly sessionsService: SessionsService) {
+  constructor(private readonly moduleRef: ModuleRef) {
     LabGateway.instance = this;
+    (global as any).labGateway = this;
+  }
+
+  private get sessionsService(): SessionsService {
+    return this.moduleRef.get(SessionsService, { strict: false });
   }
 
   handleConnection(client: Socket) {

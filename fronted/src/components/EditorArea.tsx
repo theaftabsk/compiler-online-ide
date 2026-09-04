@@ -29,7 +29,7 @@ export default function EditorArea() {
 
   const isDark = theme === 'vs-dark';
 
-  const currentFile = files.find(f => f.name === activeFileTab);
+  const currentFile = files.find((f: any) => f.name === activeFileTab);
   const currentLang = currentFile?.name.endsWith('.cpp') 
     ? 'cpp' 
     : (currentFile?.name.endsWith('.java') 
@@ -44,7 +44,7 @@ export default function EditorArea() {
         
         {/* Open Dynamic Tabs with Close Button (✕) */}
         <div className="flex items-center h-full overflow-x-auto">
-          {openTabs.map((tabName) => {
+          {openTabs.map((tabName: string) => {
             const isActive = activeFileTab === tabName;
             const isC = tabName.endsWith('.c');
             const isCpp = tabName.endsWith('.cpp');
@@ -148,7 +148,7 @@ export default function EditorArea() {
             height="100%"
             language={currentLang}
             value={code}
-            onChange={(val) => setCode(val || '')}
+            onChange={(val: any) => setCode(val || '')}
             theme={isDark ? 'vs-dark' : 'vs'}
             options={{
               fontSize: 13,

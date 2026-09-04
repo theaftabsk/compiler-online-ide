@@ -49,8 +49,8 @@ export default function BottomPanel() {
   const isDark = theme === 'vs-dark';
 
   const totalCases = activeSession?.testCases?.length || 4;
-  const passedCases = testResults.filter(t => t.passed).length;
-  const activeTerm = terminals.find(t => t.id === activeTermId) || terminals[0];
+  const passedCases = testResults.filter((t: any) => t.passed).length;
+  const activeTerm = terminals.find((t: any) => t.id === activeTermId) || terminals[0];
 
   useEffect(() => {
     terminalBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -103,7 +103,7 @@ export default function BottomPanel() {
       if (updatedLogs.length > 0) {
         updatedLogs[updatedLogs.length - 1] = `${pendingPromptText}${userInput}`;
       }
-      setTerminals(prev => prev.map(t => t.id === activeTermId ? { ...t, logs: updatedLogs } : t));
+      setTerminals((prev: any[]) => prev.map((t: any) => t.id === activeTermId ? { ...t, logs: updatedLogs } : t));
 
       // Execute code with user's manual input
       await handleRunCode(userInput);
@@ -120,7 +120,7 @@ export default function BottomPanel() {
     const currentLogs = [...(activeTerm?.logs || []), `user@codelab:~$ ${raw}`];
 
     const updateLogs = (updated: string[]) => {
-      setTerminals(prev => prev.map(t => t.id === activeTermId ? { ...t, logs: updated } : t));
+      setTerminals((prev: any[]) => prev.map((t: any) => t.id === activeTermId ? { ...t, logs: updated } : t));
     };
 
     if (cmd === 'clear' || cmd === 'cls') {
@@ -251,7 +251,7 @@ export default function BottomPanel() {
           <button 
             onClick={() => {
               setWaitingForStdin(false);
-              setTerminals(prev => prev.map(t => t.id === activeTermId ? { ...t, logs: ['user@codelab:~$ '] } : t));
+              setTerminals((prev: any[]) => prev.map((t: any) => t.id === activeTermId ? { ...t, logs: ['user@codelab:~$ '] } : t));
             }} 
             title="Clear Terminal Output"
             className="p-1 rounded hover:bg-gray-700/30 text-gray-400 hover:text-white transition"
@@ -288,7 +288,7 @@ export default function BottomPanel() {
             onClick={() => inputRef.current?.focus()}
             className="flex-1 p-3 overflow-y-auto font-mono text-xs cursor-text space-y-1"
           >
-            {activeTerm?.logs.map((log, i) => (
+            {activeTerm?.logs.map((log: any, i: number) => (
               <div key={i} className="whitespace-pre-wrap leading-relaxed">{log}</div>
             ))}
 
@@ -340,7 +340,7 @@ export default function BottomPanel() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                {testResults.map((r) => (
+                {testResults.map((r: any) => (
                   <div 
                     key={r.caseNumber}
                     className={`p-2.5 rounded-lg border flex items-center justify-between text-xs ${r.passed ? (isDark ? 'bg-[#0f2417] border-[#107c41]' : 'bg-[#e6f4ea] border-[#34a853]') : (isDark ? 'bg-[#2a1215] border-[#f14c4c]' : 'bg-[#fce8e6] border-[#ea4335]')}`}
@@ -380,7 +380,7 @@ export default function BottomPanel() {
             </div>
 
             <div className="space-y-0.5 flex-1 overflow-y-auto">
-              {terminals.map((t) => (
+              {terminals.map((t: any) => (
                 <div
                   key={t.id}
                   onClick={() => setActiveTermId(t.id)}

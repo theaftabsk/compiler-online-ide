@@ -1054,8 +1054,30 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useIDE() {
+export function useIDE(): IDEContextType {
   const context = useContext(IDEContext);
-  if (!context) throw new Error('useIDE must be used within an IDEProvider');
+  if (!context) {
+    return {
+      theme: 'vs-dark' as ThemeMode,
+      toggleTheme: () => {},
+      viewMode: 'playground' as AppViewMode,
+      setViewMode: () => {},
+      language: 'c' as ProgrammingLanguage,
+      setLanguage: () => {},
+      code: '',
+      setCode: () => {},
+      files: [],
+      openTabs: [],
+      activeFileTab: '',
+      setActiveFileTab: () => {},
+      inspectedAttendee: null,
+      setInspectedAttendee: () => {},
+      student: null,
+      activeSession: null,
+      sessionsList: [],
+      attendees: [],
+      fetchSessions: async () => {},
+    } as unknown as IDEContextType;
+  }
   return context;
 }

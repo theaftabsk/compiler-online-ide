@@ -23,11 +23,12 @@ import {
   Loader2,
   RefreshCw
 } from 'lucide-react';
-import { useIDE } from '@/context/IDEContext';
+import { IDEProvider, useIDE } from '@/context/IDEContext';
 import CodeInspectorModal from '@/components/CodeInspectorModal';
+import DesktopOnlyNotice from '@/components/DesktopOnlyNotice';
 import { MachineAttendee } from '@/types';
 
-export default function TeacherSessionDetailPage() {
+function TeacherSessionDetailInner() {
   const params = useParams();
   const sessionCode = ((params?.sessionCode as string) || 'LAB-2026').toUpperCase();
 
@@ -284,6 +285,19 @@ export default function TeacherSessionDetailPage() {
         onClose={() => setInspectedAttendee(null)}
       />
 
+      <DesktopOnlyNotice 
+        title="60-PC Lab Matrix - Desktop Recommended"
+        subtitle="The 60-PC physical workstation matrix with live keystrokes and cheating inspection is optimized for desktop and laptop screens."
+      />
+
     </div>
+  );
+}
+
+export default function TeacherSessionDetailPage() {
+  return (
+    <IDEProvider>
+      <TeacherSessionDetailInner />
+    </IDEProvider>
   );
 }

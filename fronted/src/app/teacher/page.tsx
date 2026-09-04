@@ -560,12 +560,12 @@ function TeacherDashboardInner() {
           <div className="flex items-center gap-2 text-xs font-mono">
             <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1 font-semibold">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              {sessionsList.filter(s => s.status === 'ACTIVE').length} Active
+              {sessionsList.filter((s: any) => s.status === 'ACTIVE').length} Active
             </span>
             <span className={`px-2.5 py-1 rounded-full border font-semibold ${
               isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'
             }`}>
-              {sessionsList.filter(s => s.status !== 'ACTIVE').length} Paused/Ended
+              {sessionsList.filter((s: any) => s.status !== 'ACTIVE').length} Paused/Ended
             </span>
           </div>
         </div>
@@ -591,7 +591,7 @@ function TeacherDashboardInner() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sessionsList.map((session) => {
+            {sessionsList.map((session: any) => {
               const isSelected = selectedSessionCode === session.sessionCode;
               const isActive = session.status === 'ACTIVE';
               const isUpdating = statusUpdatingCode === session.sessionCode;
