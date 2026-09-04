@@ -11,7 +11,6 @@ import StatusBar from '@/components/StatusBar';
 import TeacherPortal from '@/components/TeacherPortal';
 import StudentJoinModal from '@/components/StudentJoinModal';
 import CodeInspectorModal from '@/components/CodeInspectorModal';
-import SEOContentSection from '@/components/SEOContentSection';
 
 function IDELayout() {
   const { 
@@ -35,8 +34,7 @@ function IDELayout() {
 
   // Otherwise viewing Public Playground or Student Lab Session
   return (
-    <div className={`min-h-screen w-full flex flex-col overflow-x-hidden ${isDark ? 'bg-[#1e1e1e] text-[#cccccc]' : 'bg-[#ffffff] text-[#24292e]'}`}>
-      <main id="main-ide-workspace" role="main" className="h-screen w-full flex flex-col shrink-0 select-none overflow-hidden relative">
+    <main id="main-ide-workspace" role="main" className={`h-screen w-screen flex flex-col select-none overflow-hidden ${isDark ? 'bg-[#1e1e1e] text-[#cccccc]' : 'bg-[#ffffff] text-[#24292e]'}`}>
       
       {/* Hidden Rich Comprehensive SEO Content & Structured Authority for Search Crawlers */}
       <div className="sr-only">
@@ -166,10 +164,6 @@ int main() {
       />
 
     </main>
-
-    {/* Visible Rich SEO Authority & Educational Hub for Google #1 Ranking */}
-    <SEOContentSection />
-  </div>
   );
 }
 
