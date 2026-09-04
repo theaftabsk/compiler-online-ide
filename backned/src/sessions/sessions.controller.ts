@@ -41,6 +41,12 @@ export class SessionsController {
     return { success: true, ...gridData };
   }
 
+  @Post(':code/status')
+  async updateStatus(@Param('code') code: string, @Body('status') status: 'ACTIVE' | 'PAUSED' | 'ENDED') {
+    const session = await this.sessionsService.updateSessionStatus(code, status);
+    return { success: true, session };
+  }
+
   @Post(':code/end')
   async end(@Param('code') code: string) {
     const session = await this.sessionsService.endSession(code);

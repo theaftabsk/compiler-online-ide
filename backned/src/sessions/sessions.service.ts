@@ -352,15 +352,19 @@ export class SessionsService implements OnModuleInit {
     };
   }
 
-  async endSession(code: string) {
+  async updateSessionStatus(code: string, status: 'ACTIVE' | 'PAUSED' | 'ENDED') {
     const normalizedCode = code.trim().toUpperCase();
     return this.prisma.practicalSession.update({
       where: { sessionCode: normalizedCode },
       data: {
-        status: 'ENDED',
-        endedAt: new Date(),
+        status: status as any,
+        endedAt: status === 'ENDED' ? new Date() : null,
       },
     });
+  }
+
+  async endSession(code: string) {
+    return this.updateSessionStatus(code, 'ENDED');
   }
 
   async deleteSession(code: string) {

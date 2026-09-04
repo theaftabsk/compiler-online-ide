@@ -34,6 +34,13 @@ export interface LabSessionData {
   totalMachines: number;
   createdAt: string;
   isActive: boolean;
+  status?: string;
+  attendeeCount?: number;
+  codingCount?: number;
+  submittedCount?: number;
+  attendees?: any[];
+  totalCapacity?: number;
+  labRoomName?: string;
 }
 
 const DEFAULT_DEMO_SESSION: LabSessionData = {
